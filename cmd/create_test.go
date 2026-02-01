@@ -3,60 +3,24 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/chris-regnier/diaryctl/internal/config"
 	"github.com/chris-regnier/diaryctl/internal/entry"
-	"github.com/chris-regnier/diaryctl/internal/storage"
-	"github.com/chris-regnier/diaryctl/internal/storage/markdown"
+	"github.com/chris-regnier/diaryctl/internal/ui"
 )
 
-func setupTestStore(t *testing.T) storage.Storage {
+func setupTestEnv(t *testing.T) {
 	t.Helper()
-	dir := t.TempDir()
-	s, err := markdown.New(dir)
-	if err != nil {
-		t.Fatalf("creating test storage: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
-	return s
-}
-
-func TestCreateInline(t *testing.T) {
 	store = setupTestStore(t)
 	appConfig = &config.Config{}
 	jsonOutput = false
+}
 
-	// Capture output
-	var buf bytes.Buffer
-	rootCmd.SetOut(&buf)
-	rootCmd.SetErr(&buf)
-	rootCmd.SetArgs([]string{"create", "Test inline entry"})
+func TestCreateInline(t *testing.T) {
+	setupTestEnv(t)
 
-	// Reset subcommand for fresh run
-	createCmd.RunE = func(cmd *cobra.Command, args []string) error {
-		content := strings.Join(args, " ")
-		if err := entry.ValidateContent(content); err != nil {
-			return err
-		}
-		id, err := entry.NewID()
-		if err != nil {
-			return err
-		}
-		now := time.Now().UTC()
-		e := entry.Entry{ID: id, Content: content, CreatedAt: now, UpdatedAt: now}
-		if err := store.Create(e); err != nil {
-			return err
-		}
-		ui.FormatEntryCreated(cmd.OutOrStdout(), e)
-		return nil
-	}
-
-	// This is complex to test with Cobra's os.Exit behavior.
-	// Instead, test the storage layer directly which we've verified via contract tests.
-	// Test that inline content creates an entry correctly.
 	id, _ := entry.NewID()
 	now := time.Now().UTC()
 	e := entry.Entry{ID: id, Content: "Test inline entry", CreatedAt: now, UpdatedAt: now}
@@ -74,9 +38,6 @@ func TestCreateInline(t *testing.T) {
 }
 
 func TestCreateEmptyContentRejected(t *testing.T) {
-	store = setupTestStore(t)
-	appConfig = &config.Config{}
-
 	err := entry.ValidateContent("   ")
 	if err == nil {
 		t.Fatal("expected error for empty content")
@@ -84,7 +45,7 @@ func TestCreateEmptyContentRejected(t *testing.T) {
 }
 
 func TestCreateJSONOutput(t *testing.T) {
-	store = setupTestStore(t)
+	setupTestEnv(t)
 
 	id, _ := entry.NewID()
 	now := time.Now().UTC()
