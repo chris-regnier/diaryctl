@@ -1,0 +1,71 @@
+package cmd
+
+import (
+	"bytes"
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/chris-regnier/diaryctl/internal/entry"
+	"github.com/chris-regnier/diaryctl/internal/storage"
+	"github.com/chris-regnier/diaryctl/internal/ui"
+)
+
+func TestShowFullContent(t *testing.T) {
+	s := setupTestStore(t)
+
+	id, _ := entry.NewID()
+	now := time.Now().UTC().Truncate(time.Second)
+	e := entry.Entry{ID: id, Content: "Full diary entry content here", CreatedAt: now, UpdatedAt: now}
+	s.Create(e)
+
+	got, err := s.Get(id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+
+	var buf bytes.Buffer
+	ui.FormatEntryFull(&buf, got)
+	output := buf.String()
+
+	if !strings.Contains(output, "Entry: "+id) {
+		t.Error("missing entry ID in output")
+	}
+	if !strings.Contains(output, "Full diary entry content here") {
+		t.Error("missing content in output")
+	}
+	if !strings.Contains(output, "Created:") {
+		t.Error("missing Created header")
+	}
+}
+
+func TestShowNotFound(t *testing.T) {
+	s := setupTestStore(t)
+
+	_, err := s.Get("nonexist")
+	if err != storage.ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestShowJSONOutput(t *testing.T) {
+	s := setupTestStore(t)
+
+	id, _ := entry.NewID()
+	now := time.Now().UTC().Truncate(time.Second)
+	e := entry.Entry{ID: id, Content: "JSON show content", CreatedAt: now, UpdatedAt: now}
+	s.Create(e)
+
+	got, _ := s.Get(id)
+	var buf bytes.Buffer
+	ui.FormatJSON(&buf, got)
+
+	var result entry.Entry
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("JSON unmarshal: %v", err)
+	}
+	if result.Content != "JSON show content" {
+		t.Errorf("content = %q, want %q", result.Content, "JSON show content")
+	}
+}
