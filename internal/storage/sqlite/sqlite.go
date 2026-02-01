@@ -29,8 +29,9 @@ func New(dataDir string) (*Store, error) {
 		return nil, fmt.Errorf("%w: opening database: %v", storage.ErrStorage, err)
 	}
 
-	// Enable WAL mode
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+	// Enable WAL mode (use QueryRow since PRAGMA returns a result row)
+	var walMode string
+	if err := db.QueryRow("PRAGMA journal_mode=WAL").Scan(&walMode); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("%w: enabling WAL mode: %v", storage.ErrStorage, err)
 	}
