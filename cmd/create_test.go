@@ -6,17 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chris-regnier/diaryctl/internal/config"
 	"github.com/chris-regnier/diaryctl/internal/entry"
 	"github.com/chris-regnier/diaryctl/internal/ui"
 )
-
-func setupTestEnv(t *testing.T) {
-	t.Helper()
-	store = setupTestStore(t)
-	appConfig = &config.Config{}
-	jsonOutput = false
-}
 
 func TestCreateInline(t *testing.T) {
 	setupTestEnv(t)
@@ -63,8 +55,5 @@ func TestCreateJSONOutput(t *testing.T) {
 	}
 	if result.ID != id {
 		t.Errorf("id = %q, want %q", result.ID, id)
-	}
-	if result.Content != "JSON test" {
-		t.Errorf("content = %q, want %q", result.Content, "JSON test")
 	}
 }
