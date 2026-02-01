@@ -71,8 +71,8 @@ func TestEditTempFileCleanup(t *testing.T) {
 }
 
 func TestEditEmptyResult(t *testing.T) {
-	// Use a script that truncates the file
-	content, changed, err := Edit("sh -c 'truncate -s 0'", "original")
+	// Use cp /dev/null to empty the file — avoids shell quoting issues
+	content, changed, err := Edit("cp /dev/null", "original")
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
