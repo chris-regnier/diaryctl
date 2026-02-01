@@ -246,7 +246,7 @@ func runContractTests(t *testing.T, name string, factory storageFactory) {
 }
 
 func isValidationError(err error) bool {
-	return err != nil && (err == storage.ErrValidation || 
+	return err != nil && (err == storage.ErrValidation ||
 		(err.Error() != "" && containsValidation(err)))
 }
 

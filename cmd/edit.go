@@ -12,11 +12,11 @@ import (
 )
 
 var editCmd = &cobra.Command{
-	Use:   "edit <id>",
-	Short: "Edit a diary entry in your editor",
-	Long:  "Open an existing diary entry in your configured editor for modification.",
+	Use:     "edit <id>",
+	Short:   "Edit a diary entry in your editor",
+	Long:    "Open an existing diary entry in your configured editor for modification.",
 	Example: `  diaryctl edit a3kf9x2m`,
-	Args: cobra.ExactArgs(1),
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
 
