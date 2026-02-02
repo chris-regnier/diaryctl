@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/chris-regnier/diaryctl/internal/entry"
@@ -35,6 +36,13 @@ func FormatEntryFull(w io.Writer, e entry.Entry) {
 	fmt.Fprintf(w, "Entry: %s\n", e.ID)
 	fmt.Fprintf(w, "Created: %s\n", e.CreatedAt.Local().Format("2006-01-02 15:04"))
 	fmt.Fprintf(w, "Modified: %s\n", e.UpdatedAt.Local().Format("2006-01-02 15:04"))
+	if len(e.Templates) > 0 {
+		names := make([]string, len(e.Templates))
+		for i, ref := range e.Templates {
+			names[i] = ref.TemplateName
+		}
+		fmt.Fprintf(w, "Templates: %s\n", strings.Join(names, ", "))
+	}
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, e.Content)
 }

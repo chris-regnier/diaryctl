@@ -49,6 +49,52 @@ func TestShowNotFound(t *testing.T) {
 	}
 }
 
+func TestShowTemplateAttribution(t *testing.T) {
+	setupTestEnv(t)
+
+	tmpl := createTestTemplate(t, "daily", "# Daily")
+
+	id, _ := entry.NewID()
+	now := time.Now().UTC().Truncate(time.Second)
+	e := entry.Entry{
+		ID: id, Content: "entry with templates", CreatedAt: now, UpdatedAt: now,
+		Templates: []entry.TemplateRef{
+			{TemplateID: tmpl.ID, TemplateName: "daily"},
+		},
+	}
+	store.Create(e)
+
+	got, err := store.Get(id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+
+	var buf bytes.Buffer
+	ui.FormatEntryFull(&buf, got)
+	output := buf.String()
+
+	if !strings.Contains(output, "Templates: daily") {
+		t.Errorf("expected 'Templates: daily' in output:\n%s", output)
+	}
+}
+
+func TestShowNoTemplateAttribution(t *testing.T) {
+	s := setupTestStore(t)
+
+	id, _ := entry.NewID()
+	now := time.Now().UTC().Truncate(time.Second)
+	e := entry.Entry{ID: id, Content: "no templates", CreatedAt: now, UpdatedAt: now}
+	s.Create(e)
+
+	got, _ := s.Get(id)
+	var buf bytes.Buffer
+	ui.FormatEntryFull(&buf, got)
+
+	if strings.Contains(buf.String(), "Templates:") {
+		t.Errorf("should not show Templates line for entry without templates:\n%s", buf.String())
+	}
+}
+
 func TestShowJSONOutput(t *testing.T) {
 	s := setupTestStore(t)
 
