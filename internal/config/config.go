@@ -9,9 +9,10 @@ import (
 
 // Config holds the application configuration.
 type Config struct {
-	Storage string `mapstructure:"storage"`
-	DataDir string `mapstructure:"data_dir"`
-	Editor  string `mapstructure:"editor"`
+	Storage         string `mapstructure:"storage"`
+	DataDir         string `mapstructure:"data_dir"`
+	Editor          string `mapstructure:"editor"`
+	DefaultTemplate string `mapstructure:"default_template"`
 }
 
 // DefaultDataDir returns the default data directory (~/.diaryctl/).
@@ -31,6 +32,7 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("storage", "markdown")
 	v.SetDefault("data_dir", DefaultDataDir())
 	v.SetDefault("editor", "")
+	v.SetDefault("default_template", "")
 
 	// Config file
 	if configPath != "" {
