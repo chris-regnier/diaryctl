@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/chris-regnier/diaryctl/internal/entry"
+	"github.com/chris-regnier/diaryctl/internal/storage"
 )
 
 // FormatEntryCreated formats a creation confirmation message.
@@ -51,6 +52,27 @@ func FormatEntryList(w io.Writer, entries []entry.Entry) {
 			e.Preview(60),
 		)
 	}
+}
+
+// FormatTemplateList formats a list of templates.
+func FormatTemplateList(w io.Writer, templates []storage.Template) {
+	if len(templates) == 0 {
+		fmt.Fprintln(w, "No templates found.")
+		return
+	}
+	for _, t := range templates {
+		fmt.Fprintf(w, "%s  %s  %s\n", t.Name, t.ID, t.UpdatedAt.Local().Format("2006-01-02 15:04"))
+	}
+}
+
+// FormatTemplateFull formats a full template display.
+func FormatTemplateFull(w io.Writer, t storage.Template) {
+	fmt.Fprintf(w, "Template: %s\n", t.Name)
+	fmt.Fprintf(w, "ID: %s\n", t.ID)
+	fmt.Fprintf(w, "Created: %s\n", t.CreatedAt.Local().Format("2006-01-02 15:04"))
+	fmt.Fprintf(w, "Modified: %s\n", t.UpdatedAt.Local().Format("2006-01-02 15:04"))
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, t.Content)
 }
 
 // FormatJSON writes any value as JSON to the writer.
