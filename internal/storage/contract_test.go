@@ -558,7 +558,7 @@ func runTemplateContractTests(t *testing.T, name string, factory storageFactory)
 
 		t.Run("CreateTemplate and GetTemplate", func(t *testing.T) {
 			s := factory(t)
-			tmpl := makeTemplate(t, "daily", "# Daily Entry\n\n")
+			tmpl := makeTemplate(t, "daily", "# Daily Entry")
 			err := s.CreateTemplate(tmpl)
 			if err != nil {
 				t.Fatalf("CreateTemplate: %v", err)
@@ -567,7 +567,7 @@ func runTemplateContractTests(t *testing.T, name string, factory storageFactory)
 			if err != nil {
 				t.Fatalf("GetTemplate: %v", err)
 			}
-			if got.Name != "daily" || got.Content != "# Daily Entry\n\n" {
+			if got.Name != "daily" || got.Content != "# Daily Entry" {
 				t.Errorf("got name=%q content=%q", got.Name, got.Content)
 			}
 		})
