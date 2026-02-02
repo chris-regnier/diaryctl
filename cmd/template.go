@@ -196,11 +196,11 @@ var templateEditCmd = &cobra.Command{
 var forceDeleteTemplate bool
 
 var templateDeleteCmd = &cobra.Command{
-	Use:   "delete <name>",
-	Short: "Delete a template",
-	Long:  "Permanently delete a template. Requires --force flag.",
+	Use:     "delete <name>",
+	Short:   "Delete a template",
+	Long:    "Permanently delete a template. Requires --force flag.",
 	Example: `  diaryctl template delete daily --force`,
-	Args: cobra.ExactArgs(1),
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
