@@ -95,6 +95,52 @@ func TestShowNoTemplateAttribution(t *testing.T) {
 	}
 }
 
+func TestShowIDOnly(t *testing.T) {
+	setupTestEnv(t)
+
+	id, _ := entry.NewID()
+	now := time.Now().UTC().Truncate(time.Second)
+	e := entry.Entry{ID: id, Content: "id-only test content", CreatedAt: now, UpdatedAt: now}
+	store.Create(e)
+
+	showIDOnly = true
+	t.Cleanup(func() { showIDOnly = false })
+
+	var buf bytes.Buffer
+	showCmd.SetOut(&buf)
+	if err := showCmd.RunE(showCmd, []string{id}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	if output != id {
+		t.Errorf("output = %q, want %q", output, id)
+	}
+}
+
+func TestShowContentOnly(t *testing.T) {
+	setupTestEnv(t)
+
+	id, _ := entry.NewID()
+	now := time.Now().UTC().Truncate(time.Second)
+	e := entry.Entry{ID: id, Content: "content-only test body", CreatedAt: now, UpdatedAt: now}
+	store.Create(e)
+
+	showContentOnly = true
+	t.Cleanup(func() { showContentOnly = false })
+
+	var buf bytes.Buffer
+	showCmd.SetOut(&buf)
+	if err := showCmd.RunE(showCmd, []string{id}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	if output != "content-only test body" {
+		t.Errorf("output = %q, want %q", output, "content-only test body")
+	}
+}
+
 func TestShowJSONOutput(t *testing.T) {
 	s := setupTestStore(t)
 
