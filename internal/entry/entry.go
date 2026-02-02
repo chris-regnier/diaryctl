@@ -15,13 +15,21 @@ const (
 )
 
 var idPattern = regexp.MustCompile(`^[a-z0-9]{8}$`)
+var templateNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+
+// TemplateRef is a lightweight reference to a template, stored on entries for attribution.
+type TemplateRef struct {
+	TemplateID   string `json:"template_id"`
+	TemplateName string `json:"template_name"`
+}
 
 // Entry represents a single diary entry.
 type Entry struct {
-	ID        string    `json:"id"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        string        `json:"id"`
+	Content   string        `json:"content"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
+	Templates []TemplateRef `json:"templates,omitempty"`
 }
 
 // NewID generates a new nanoid for an entry.
@@ -41,6 +49,14 @@ func ValidateID(id string) error {
 func ValidateContent(content string) error {
 	if strings.TrimSpace(content) == "" {
 		return fmt.Errorf("entry content must not be empty")
+	}
+	return nil
+}
+
+// ValidateTemplateName checks whether a template name is valid.
+func ValidateTemplateName(name string) error {
+	if !templateNamePattern.MatchString(name) {
+		return fmt.Errorf("invalid template name %q: must be lowercase alphanumeric, hyphens, underscores", name)
 	}
 	return nil
 }

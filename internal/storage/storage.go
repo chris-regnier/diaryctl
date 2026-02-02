@@ -38,8 +38,18 @@ type ListDaysOptions struct {
 	EndDate   *time.Time // inclusive upper bound (nil = no upper bound)
 }
 
+// Template represents a reusable content template.
+type Template struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // Storage defines the interface for diary entry persistence.
 type Storage interface {
+	// Entry methods
 	Create(e entry.Entry) error
 	Get(id string) (entry.Entry, error)
 	List(opts ListOptions) ([]entry.Entry, error)
@@ -47,4 +57,12 @@ type Storage interface {
 	Update(id string, content string) (entry.Entry, error)
 	Delete(id string) error
 	Close() error
+
+	// Template methods
+	CreateTemplate(t Template) error
+	GetTemplate(id string) (Template, error)
+	GetTemplateByName(name string) (Template, error)
+	ListTemplates() ([]Template, error)
+	UpdateTemplate(id string, name string, content string) (Template, error)
+	DeleteTemplate(id string) error
 }
