@@ -17,12 +17,13 @@ var (
 
 // ListOptions controls filtering and ordering for List operations.
 type ListOptions struct {
-	Date      *time.Time // filter by single date (local timezone)
-	StartDate *time.Time // inclusive lower bound (nil = no lower bound)
-	EndDate   *time.Time // inclusive upper bound (nil = no upper bound)
-	OrderBy   string     // "created_at" (default: desc)
-	Limit     int        // 0 = no limit
-	Offset    int        // pagination offset
+	Date         *time.Time // filter by single date (local timezone)
+	StartDate    *time.Time // inclusive lower bound (nil = no lower bound)
+	EndDate      *time.Time // inclusive upper bound (nil = no upper bound)
+	TemplateName string     // filter entries by template attribution
+	OrderBy      string     // "created_at" (default: desc)
+	Limit        int        // 0 = no limit
+	Offset       int        // pagination offset
 }
 
 // DaySummary represents an aggregated view of entries for a single calendar day.
