@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	dailyFrom          string
-	dailyTo            string
-	dailyNoInteractive bool
+	dailyFrom           string
+	dailyTo             string
+	dailyNoInteractive  bool
+	dailyTemplateFilter string
 )
 
 var dailyCmd = &cobra.Command{
@@ -30,6 +31,7 @@ In non-interactive mode (piped output, --no-interactive, or --json),
 prints a grouped-by-day summary to stdout.`,
 	Example: `  diaryctl daily
   diaryctl daily --from 2026-01-01 --to 2026-01-31
+  diaryctl daily --template daily
   diaryctl daily --no-interactive
   diaryctl daily --no-interactive --json
   diaryctl daily | head -20`,
@@ -57,20 +59,22 @@ prints a grouped-by-day summary to stdout.`,
 		nonInteractive := dailyNoInteractive || jsonOutput || !term.IsTerminal(int(os.Stdout.Fd()))
 
 		if nonInteractive {
-			return runDailyNonInteractive(startDate, endDate)
+			return runDailyNonInteractive(startDate, endDate, dailyTemplateFilter)
 		}
 
 		return ui.RunPicker(store, storage.ListDaysOptions{
-			StartDate: startDate,
-			EndDate:   endDate,
+			StartDate:    startDate,
+			EndDate:      endDate,
+			TemplateName: dailyTemplateFilter,
 		})
 	},
 }
 
-func runDailyNonInteractive(startDate, endDate *time.Time) error {
+func runDailyNonInteractive(startDate, endDate *time.Time, templateFilter string) error {
 	days, err := store.ListDays(storage.ListDaysOptions{
-		StartDate: startDate,
-		EndDate:   endDate,
+		StartDate:    startDate,
+		EndDate:      endDate,
+		TemplateName: templateFilter,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
@@ -110,5 +114,6 @@ func init() {
 	dailyCmd.Flags().StringVar(&dailyFrom, "from", "", "start date filter (YYYY-MM-DD, inclusive)")
 	dailyCmd.Flags().StringVar(&dailyTo, "to", "", "end date filter (YYYY-MM-DD, inclusive)")
 	dailyCmd.Flags().BoolVar(&dailyNoInteractive, "no-interactive", false, "force non-interactive output")
+	dailyCmd.Flags().StringVar(&dailyTemplateFilter, "template", "", "filter by template name")
 	rootCmd.AddCommand(dailyCmd)
 }

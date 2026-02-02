@@ -11,7 +11,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var dateFilter string
+var (
+	dateFilter         string
+	listTemplateFilter string
+)
 
 var listCmd = &cobra.Command{
 	Use:   "list",
@@ -19,6 +22,7 @@ var listCmd = &cobra.Command{
 	Long:  "List diary entries with preview, sorted by date (newest first).",
 	Example: `  diaryctl list
   diaryctl list --date 2026-01-31
+  diaryctl list --template daily
   diaryctl list --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := storage.ListOptions{}
@@ -30,6 +34,10 @@ var listCmd = &cobra.Command{
 				os.Exit(1)
 			}
 			opts.Date = &t
+		}
+
+		if listTemplateFilter != "" {
+			opts.TemplateName = listTemplateFilter
 		}
 
 		entries, err := store.List(opts)
@@ -53,5 +61,6 @@ var listCmd = &cobra.Command{
 
 func init() {
 	listCmd.Flags().StringVar(&dateFilter, "date", "", "filter by date (YYYY-MM-DD)")
+	listCmd.Flags().StringVar(&listTemplateFilter, "template", "", "filter by template name")
 	rootCmd.AddCommand(listCmd)
 }

@@ -84,6 +84,41 @@ func TestListEmptyMessage(t *testing.T) {
 	}
 }
 
+func TestListTemplateFilter(t *testing.T) {
+	setupTestEnv(t)
+
+	tmpl := createTestTemplate(t, "daily", "# Daily")
+
+	// Entry with template
+	id1, _ := entry.NewID()
+	now := time.Now().UTC().Truncate(time.Second)
+	e1 := entry.Entry{
+		ID: id1, Content: "with template", CreatedAt: now, UpdatedAt: now,
+		Templates: []entry.TemplateRef{{TemplateID: tmpl.ID, TemplateName: "daily"}},
+	}
+	store.Create(e1)
+
+	// Entry without template
+	id2, _ := entry.NewID()
+	e2 := entry.Entry{ID: id2, Content: "without template", CreatedAt: now.Add(time.Second), UpdatedAt: now.Add(time.Second)}
+	store.Create(e2)
+
+	// Filter by template
+	entries, err := store.List(storage.ListOptions{TemplateName: "daily"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(entries) != 1 || entries[0].ID != id1 {
+		t.Errorf("expected 1 entry with template 'daily', got %d", len(entries))
+	}
+
+	// Without filter returns both
+	all, _ := store.List(storage.ListOptions{})
+	if len(all) != 2 {
+		t.Errorf("expected 2 entries without filter, got %d", len(all))
+	}
+}
+
 func TestListJSONOutput(t *testing.T) {
 	s := setupTestStore(t)
 

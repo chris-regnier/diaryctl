@@ -334,6 +334,20 @@ func (s *Store) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, er
 			}
 		}
 
+		// Template name filter
+		if opts.TemplateName != "" {
+			found := false
+			for _, ref := range e.Templates {
+				if ref.TemplateName == opts.TemplateName {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil
+			}
+		}
+
 		key := entryDate.Format("2006-01-02")
 		dd, exists := days[key]
 		if !exists {

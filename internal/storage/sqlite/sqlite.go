@@ -251,18 +251,24 @@ func (s *Store) List(opts storage.ListOptions) ([]entry.Entry, error) {
 
 // ListDays returns aggregated day summaries grouped by date.
 func (s *Store) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, error) {
-	query := `SELECT date(created_at, 'localtime') as day, COUNT(*) as cnt,
+	query := `SELECT date(entries.created_at, 'localtime') as day, COUNT(*) as cnt,
 		(SELECT content FROM entries e2 WHERE date(e2.created_at, 'localtime') = date(entries.created_at, 'localtime') ORDER BY e2.created_at DESC LIMIT 1) as preview
 		FROM entries`
-	var args []interface{}
+	var args []any
 	var conditions []string
 
+	if opts.TemplateName != "" {
+		query += ` JOIN entry_templates et ON et.entry_id = entries.id`
+		conditions = append(conditions, "et.template_name = ?")
+		args = append(args, opts.TemplateName)
+	}
+
 	if opts.StartDate != nil {
-		conditions = append(conditions, "date(created_at, 'localtime') >= ?")
+		conditions = append(conditions, "date(entries.created_at, 'localtime') >= ?")
 		args = append(args, opts.StartDate.Format("2006-01-02"))
 	}
 	if opts.EndDate != nil {
-		conditions = append(conditions, "date(created_at, 'localtime') <= ?")
+		conditions = append(conditions, "date(entries.created_at, 'localtime') <= ?")
 		args = append(args, opts.EndDate.Format("2006-01-02"))
 	}
 
@@ -270,7 +276,7 @@ func (s *Store) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, er
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	query += " GROUP BY date(created_at, 'localtime') ORDER BY day DESC"
+	query += " GROUP BY date(entries.created_at, 'localtime') ORDER BY day DESC"
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {

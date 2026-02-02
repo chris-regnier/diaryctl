@@ -35,8 +35,9 @@ type DaySummary struct {
 
 // ListDaysOptions controls filtering for ListDays operations.
 type ListDaysOptions struct {
-	StartDate *time.Time // inclusive lower bound (nil = no lower bound)
-	EndDate   *time.Time // inclusive upper bound (nil = no upper bound)
+	StartDate    *time.Time // inclusive lower bound (nil = no lower bound)
+	EndDate      *time.Time // inclusive upper bound (nil = no upper bound)
+	TemplateName string     // filter days to those with entries matching this template
 }
 
 // Template represents a reusable content template.
