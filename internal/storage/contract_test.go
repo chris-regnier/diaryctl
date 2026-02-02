@@ -1,6 +1,7 @@
 package storage_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -199,7 +200,7 @@ func runContractTests(t *testing.T, name string, factory storageFactory) {
 				t.Fatalf("Create: %v", err)
 			}
 
-			updated, err := s.Update(e.ID, "new content")
+			updated, err := s.Update(e.ID, "new content", nil)
 			if err != nil {
 				t.Fatalf("Update: %v", err)
 			}
@@ -216,7 +217,7 @@ func runContractTests(t *testing.T, name string, factory storageFactory) {
 
 		t.Run("Update not found", func(t *testing.T) {
 			s := factory(t)
-			_, err := s.Update("nonexist", "new content")
+			_, err := s.Update("nonexist", "new content", nil)
 			if err != storage.ErrNotFound {
 				t.Errorf("expected ErrNotFound, got: %v", err)
 			}
@@ -536,6 +537,199 @@ func runContractTests(t *testing.T, name string, factory storageFactory) {
 	})
 }
 
+func makeTemplate(t *testing.T, name, content string) storage.Template {
+	t.Helper()
+	id, err := entry.NewID()
+	if err != nil {
+		t.Fatalf("generating ID: %v", err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	return storage.Template{
+		ID:        id,
+		Name:      name,
+		Content:   content,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+func runTemplateContractTests(t *testing.T, name string, factory storageFactory) {
+	t.Run(name+" Template CRUD", func(t *testing.T) {
+
+		t.Run("CreateTemplate and GetTemplate", func(t *testing.T) {
+			s := factory(t)
+			tmpl := makeTemplate(t, "daily", "# Daily Entry")
+			err := s.CreateTemplate(tmpl)
+			if err != nil {
+				t.Fatalf("CreateTemplate: %v", err)
+			}
+			got, err := s.GetTemplate(tmpl.ID)
+			if err != nil {
+				t.Fatalf("GetTemplate: %v", err)
+			}
+			if got.Name != "daily" || got.Content != "# Daily Entry" {
+				t.Errorf("got name=%q content=%q", got.Name, got.Content)
+			}
+		})
+
+		t.Run("GetTemplateByName", func(t *testing.T) {
+			s := factory(t)
+			tmpl := makeTemplate(t, "prompts", "## Prompts\n\n- What happened today?\n")
+			_ = s.CreateTemplate(tmpl)
+			got, err := s.GetTemplateByName("prompts")
+			if err != nil {
+				t.Fatalf("GetTemplateByName: %v", err)
+			}
+			if got.ID != tmpl.ID {
+				t.Errorf("got ID=%q want %q", got.ID, tmpl.ID)
+			}
+		})
+
+		t.Run("GetTemplateByName not found", func(t *testing.T) {
+			s := factory(t)
+			_, err := s.GetTemplateByName("nonexistent")
+			if !errors.Is(err, storage.ErrNotFound) {
+				t.Errorf("expected ErrNotFound, got %v", err)
+			}
+		})
+
+		t.Run("CreateTemplate duplicate name", func(t *testing.T) {
+			s := factory(t)
+			tmpl1 := makeTemplate(t, "daily", "content1")
+			tmpl2 := makeTemplate(t, "daily", "content2")
+			_ = s.CreateTemplate(tmpl1)
+			err := s.CreateTemplate(tmpl2)
+			if !errors.Is(err, storage.ErrConflict) {
+				t.Errorf("expected ErrConflict, got %v", err)
+			}
+		})
+
+		t.Run("ListTemplates", func(t *testing.T) {
+			s := factory(t)
+			_ = s.CreateTemplate(makeTemplate(t, "alpha", "a"))
+			_ = s.CreateTemplate(makeTemplate(t, "beta", "b"))
+			_ = s.CreateTemplate(makeTemplate(t, "gamma", "c"))
+			list, err := s.ListTemplates()
+			if err != nil {
+				t.Fatalf("ListTemplates: %v", err)
+			}
+			if len(list) != 3 {
+				t.Errorf("got %d templates, want 3", len(list))
+			}
+		})
+
+		t.Run("UpdateTemplate", func(t *testing.T) {
+			s := factory(t)
+			tmpl := makeTemplate(t, "daily", "old content")
+			_ = s.CreateTemplate(tmpl)
+			updated, err := s.UpdateTemplate(tmpl.ID, "daily-v2", "new content")
+			if err != nil {
+				t.Fatalf("UpdateTemplate: %v", err)
+			}
+			if updated.Name != "daily-v2" || updated.Content != "new content" {
+				t.Errorf("got name=%q content=%q", updated.Name, updated.Content)
+			}
+		})
+
+		t.Run("UpdateTemplate not found", func(t *testing.T) {
+			s := factory(t)
+			_, err := s.UpdateTemplate("nonexist", "name", "content")
+			if !errors.Is(err, storage.ErrNotFound) {
+				t.Errorf("expected ErrNotFound, got %v", err)
+			}
+		})
+
+		t.Run("DeleteTemplate", func(t *testing.T) {
+			s := factory(t)
+			tmpl := makeTemplate(t, "daily", "content")
+			_ = s.CreateTemplate(tmpl)
+			err := s.DeleteTemplate(tmpl.ID)
+			if err != nil {
+				t.Fatalf("DeleteTemplate: %v", err)
+			}
+			_, err = s.GetTemplate(tmpl.ID)
+			if !errors.Is(err, storage.ErrNotFound) {
+				t.Errorf("expected ErrNotFound after delete, got %v", err)
+			}
+		})
+
+		t.Run("DeleteTemplate not found", func(t *testing.T) {
+			s := factory(t)
+			err := s.DeleteTemplate("nonexist")
+			if !errors.Is(err, storage.ErrNotFound) {
+				t.Errorf("expected ErrNotFound, got %v", err)
+			}
+		})
+	})
+}
+
+func runAttributionContractTests(t *testing.T, name string, factory storageFactory) {
+	t.Run(name+" Template Attribution", func(t *testing.T) {
+
+		t.Run("Create entry with template refs", func(t *testing.T) {
+			s := factory(t)
+			tmpl := makeTemplate(t, "daily", "# Daily\n")
+			_ = s.CreateTemplate(tmpl)
+
+			e := makeEntry(t, "hello world")
+			e.Templates = []entry.TemplateRef{
+				{TemplateID: tmpl.ID, TemplateName: tmpl.Name},
+			}
+			err := s.Create(e)
+			if err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+			got, err := s.Get(e.ID)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if len(got.Templates) != 1 || got.Templates[0].TemplateName != "daily" {
+				t.Errorf("expected 1 template ref 'daily', got %v", got.Templates)
+			}
+		})
+
+		t.Run("Create entry without template refs", func(t *testing.T) {
+			s := factory(t)
+			e := makeEntry(t, "no templates")
+			err := s.Create(e)
+			if err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+			got, err := s.Get(e.ID)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if len(got.Templates) != 0 {
+				t.Errorf("expected 0 template refs, got %v", got.Templates)
+			}
+		})
+
+		t.Run("List entries filtered by template name", func(t *testing.T) {
+			s := factory(t)
+			tmpl := makeTemplate(t, "daily", "# Daily\n")
+			_ = s.CreateTemplate(tmpl)
+
+			e1 := makeEntry(t, "with template")
+			e1.Templates = []entry.TemplateRef{
+				{TemplateID: tmpl.ID, TemplateName: tmpl.Name},
+			}
+			_ = s.Create(e1)
+
+			e2 := makeEntry(t, "without template")
+			_ = s.Create(e2)
+
+			opts := storage.ListOptions{TemplateName: "daily"}
+			results, err := s.List(opts)
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			if len(results) != 1 || results[0].ID != e1.ID {
+				t.Errorf("expected 1 entry with template 'daily', got %d", len(results))
+			}
+		})
+	})
+}
+
 func isValidationError(err error) bool {
 	return err != nil && (err == storage.ErrValidation ||
 		(err.Error() != "" && containsValidation(err)))
@@ -557,8 +751,12 @@ func containsValidation(err error) bool {
 
 func TestMarkdownStorage(t *testing.T) {
 	runContractTests(t, "Markdown", markdownFactory)
+	runTemplateContractTests(t, "Markdown", markdownFactory)
+	runAttributionContractTests(t, "Markdown", markdownFactory)
 }
 
 func TestSQLiteStorage(t *testing.T) {
 	runContractTests(t, "SQLite", sqliteFactory)
+	runTemplateContractTests(t, "SQLite", sqliteFactory)
+	runAttributionContractTests(t, "SQLite", sqliteFactory)
 }

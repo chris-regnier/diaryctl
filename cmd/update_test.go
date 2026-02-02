@@ -19,7 +19,7 @@ func TestUpdateInline(t *testing.T) {
 	e := entry.Entry{ID: id, Content: "original", CreatedAt: now, UpdatedAt: now}
 	s.Create(e)
 
-	updated, err := s.Update(id, "updated inline")
+	updated, err := s.Update(id, "updated inline", nil)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestUpdateTimestampPreservation(t *testing.T) {
 	e := entry.Entry{ID: id, Content: "original", CreatedAt: created, UpdatedAt: created}
 	s.Create(e)
 
-	updated, _ := s.Update(id, "new content")
+	updated, _ := s.Update(id, "new content", nil)
 	if !updated.CreatedAt.Equal(created) {
 		t.Errorf("created_at changed: got %v, want %v", updated.CreatedAt, created)
 	}
@@ -47,7 +47,7 @@ func TestUpdateTimestampPreservation(t *testing.T) {
 
 func TestUpdateNotFound(t *testing.T) {
 	s := setupTestStore(t)
-	_, err := s.Update("nonexist", "content")
+	_, err := s.Update("nonexist", "content", nil)
 	if err != storage.ErrNotFound {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
@@ -61,7 +61,7 @@ func TestUpdateJSONOutput(t *testing.T) {
 	e := entry.Entry{ID: id, Content: "original", CreatedAt: now, UpdatedAt: now}
 	s.Create(e)
 
-	updated, _ := s.Update(id, "json update test")
+	updated, _ := s.Update(id, "json update test", nil)
 
 	var buf bytes.Buffer
 	ui.FormatJSON(&buf, updated)

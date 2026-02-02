@@ -41,7 +41,7 @@ var updateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		updated, err := store.Update(id, strings.TrimSpace(content))
+		updated, err := store.Update(id, strings.TrimSpace(content), nil)
 		if err != nil {
 			if errors.Is(err, storage.ErrNotFound) {
 				fmt.Fprintf(os.Stderr, "Error: entry %s not found\n", id)

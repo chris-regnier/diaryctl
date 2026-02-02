@@ -18,7 +18,7 @@ func ResolveEditor(configEditor string) string {
 	if ed := os.Getenv("VISUAL"); ed != "" {
 		return ed
 	}
-	return "vi"
+	return "hx"
 }
 
 // Edit opens the given content in an editor and returns the edited content.

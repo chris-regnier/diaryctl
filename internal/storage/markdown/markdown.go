@@ -23,7 +23,8 @@ func localDate(t time.Time) time.Time {
 
 // Store implements storage.Storage using Markdown files with YAML front-matter.
 type Store struct {
-	baseDir string // e.g. ~/.diaryctl/entries/
+	baseDir      string // e.g. ~/.diaryctl/entries/
+	templatesDir string // e.g. ~/.diaryctl/templates/
 }
 
 // New creates a new Markdown file storage backend.
@@ -32,7 +33,11 @@ func New(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(entriesDir, 0755); err != nil {
 		return nil, fmt.Errorf("%w: creating entries directory: %v", storage.ErrStorage, err)
 	}
-	return &Store{baseDir: entriesDir}, nil
+	templatesDir := filepath.Join(dataDir, "templates")
+	if err := os.MkdirAll(templatesDir, 0755); err != nil {
+		return nil, fmt.Errorf("%w: creating templates directory: %v", storage.ErrStorage, err)
+	}
+	return &Store{baseDir: entriesDir, templatesDir: templatesDir}, nil
 }
 
 // Close is a no-op for the Markdown backend.
@@ -46,19 +51,33 @@ func (s *Store) entryPath(e entry.Entry) string {
 }
 
 func (s *Store) marshal(e entry.Entry) []byte {
-	fm := fmt.Sprintf("---\nid: %s\ncreated_at: %s\nupdated_at: %s\n---\n\n%s",
-		e.ID,
-		e.CreatedAt.UTC().Format(time.RFC3339),
-		e.UpdatedAt.UTC().Format(time.RFC3339),
-		e.Content,
-	)
-	return []byte(fm)
+	var b strings.Builder
+	b.WriteString("---\n")
+	fmt.Fprintf(&b, "id: %s\n", e.ID)
+	fmt.Fprintf(&b, "created_at: %s\n", e.CreatedAt.UTC().Format(time.RFC3339))
+	fmt.Fprintf(&b, "updated_at: %s\n", e.UpdatedAt.UTC().Format(time.RFC3339))
+	if len(e.Templates) > 0 {
+		b.WriteString("templates:\n")
+		for _, ref := range e.Templates {
+			fmt.Fprintf(&b, "  - template_id: %s\n", ref.TemplateID)
+			fmt.Fprintf(&b, "    template_name: %s\n", ref.TemplateName)
+		}
+	}
+	b.WriteString("---\n\n")
+	b.WriteString(e.Content)
+	return []byte(b.String())
+}
+
+type fmTemplateRef struct {
+	TemplateID   string `yaml:"template_id"`
+	TemplateName string `yaml:"template_name"`
 }
 
 type frontMatter struct {
-	ID        string `yaml:"id"`
-	CreatedAt string `yaml:"created_at"`
-	UpdatedAt string `yaml:"updated_at"`
+	ID        string          `yaml:"id"`
+	CreatedAt string          `yaml:"created_at"`
+	UpdatedAt string          `yaml:"updated_at"`
+	Templates []fmTemplateRef `yaml:"templates"`
 }
 
 func (s *Store) unmarshal(data []byte) (entry.Entry, error) {
@@ -77,11 +96,20 @@ func (s *Store) unmarshal(data []byte) (entry.Entry, error) {
 		return entry.Entry{}, fmt.Errorf("%w: parsing updated_at: %v", storage.ErrStorage, err)
 	}
 
+	var templates []entry.TemplateRef
+	for _, ref := range fm.Templates {
+		templates = append(templates, entry.TemplateRef{
+			TemplateID:   ref.TemplateID,
+			TemplateName: ref.TemplateName,
+		})
+	}
+
 	return entry.Entry{
 		ID:        fm.ID,
 		Content:   strings.TrimSpace(string(content)),
 		CreatedAt: createdAt,
 		UpdatedAt: updatedAt,
+		Templates: templates,
 	}, nil
 }
 
@@ -224,6 +252,20 @@ func (s *Store) List(opts storage.ListOptions) ([]entry.Entry, error) {
 			}
 		}
 
+		// Template name filter
+		if opts.TemplateName != "" {
+			found := false
+			for _, ref := range e.Templates {
+				if ref.TemplateName == opts.TemplateName {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil
+			}
+		}
+
 		entries = append(entries, e)
 		return nil
 	})
@@ -292,6 +334,20 @@ func (s *Store) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, er
 			}
 		}
 
+		// Template name filter
+		if opts.TemplateName != "" {
+			found := false
+			for _, ref := range e.Templates {
+				if ref.TemplateName == opts.TemplateName {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil
+			}
+		}
+
 		key := entryDate.Format("2006-01-02")
 		dd, exists := days[key]
 		if !exists {
@@ -330,8 +386,9 @@ func (s *Store) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, er
 	return summaries, nil
 }
 
-// Update modifies an existing entry's content.
-func (s *Store) Update(id string, content string) (entry.Entry, error) {
+// Update modifies an existing entry's content and optionally its template refs.
+// Pass nil for templates to preserve existing refs.
+func (s *Store) Update(id string, content string, templates []entry.TemplateRef) (entry.Entry, error) {
 	if err := entry.ValidateContent(content); err != nil {
 		return entry.Entry{}, fmt.Errorf("%w: %v", storage.ErrValidation, err)
 	}
@@ -353,12 +410,184 @@ func (s *Store) Update(id string, content string) (entry.Entry, error) {
 
 	e.Content = content
 	e.UpdatedAt = time.Now().UTC()
+	if templates != nil {
+		e.Templates = templates
+	}
 
 	if err := s.atomicWrite(path, s.marshal(e)); err != nil {
 		return entry.Entry{}, err
 	}
 
 	return e, nil
+}
+
+// --- Template methods ---
+
+type templateFrontMatter struct {
+	ID        string `yaml:"id"`
+	Name      string `yaml:"name"`
+	CreatedAt string `yaml:"created_at"`
+	UpdatedAt string `yaml:"updated_at"`
+}
+
+func (s *Store) marshalTemplate(t storage.Template) []byte {
+	var b strings.Builder
+	b.WriteString("---\n")
+	fmt.Fprintf(&b, "id: %s\n", t.ID)
+	fmt.Fprintf(&b, "name: %s\n", t.Name)
+	fmt.Fprintf(&b, "created_at: %s\n", t.CreatedAt.UTC().Format(time.RFC3339))
+	fmt.Fprintf(&b, "updated_at: %s\n", t.UpdatedAt.UTC().Format(time.RFC3339))
+	b.WriteString("---\n\n")
+	b.WriteString(t.Content)
+	return []byte(b.String())
+}
+
+func (s *Store) unmarshalTemplate(data []byte) (storage.Template, error) {
+	var fm templateFrontMatter
+	content, err := frontmatter.Parse(strings.NewReader(string(data)), &fm)
+	if err != nil {
+		return storage.Template{}, fmt.Errorf("%w: parsing template front-matter: %v", storage.ErrStorage, err)
+	}
+	createdAt, err := time.Parse(time.RFC3339, fm.CreatedAt)
+	if err != nil {
+		return storage.Template{}, fmt.Errorf("%w: parsing created_at: %v", storage.ErrStorage, err)
+	}
+	updatedAt, err := time.Parse(time.RFC3339, fm.UpdatedAt)
+	if err != nil {
+		return storage.Template{}, fmt.Errorf("%w: parsing updated_at: %v", storage.ErrStorage, err)
+	}
+	return storage.Template{
+		ID:        fm.ID,
+		Name:      fm.Name,
+		Content:   strings.TrimSpace(string(content)),
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
+	}, nil
+}
+
+func (s *Store) templatePath(name string) string {
+	return filepath.Join(s.templatesDir, name+".md")
+}
+
+// CreateTemplate persists a new template as a Markdown file.
+func (s *Store) CreateTemplate(t storage.Template) error {
+	if err := entry.ValidateTemplateName(t.Name); err != nil {
+		return fmt.Errorf("%w: %v", storage.ErrValidation, err)
+	}
+	path := s.templatePath(t.Name)
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%w: template %q already exists", storage.ErrConflict, t.Name)
+	}
+	return s.atomicWrite(path, s.marshalTemplate(t))
+}
+
+// GetTemplate retrieves a template by ID by scanning the templates directory.
+func (s *Store) GetTemplate(id string) (storage.Template, error) {
+	entries, err := os.ReadDir(s.templatesDir)
+	if err != nil {
+		return storage.Template{}, fmt.Errorf("%w: reading templates dir: %v", storage.ErrStorage, err)
+	}
+	for _, de := range entries {
+		if de.IsDir() || !strings.HasSuffix(de.Name(), ".md") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(s.templatesDir, de.Name()))
+		if err != nil {
+			continue
+		}
+		tmpl, err := s.unmarshalTemplate(data)
+		if err != nil {
+			continue
+		}
+		if tmpl.ID == id {
+			return tmpl, nil
+		}
+	}
+	return storage.Template{}, storage.ErrNotFound
+}
+
+// GetTemplateByName retrieves a template by name.
+func (s *Store) GetTemplateByName(name string) (storage.Template, error) {
+	path := s.templatePath(name)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return storage.Template{}, storage.ErrNotFound
+		}
+		return storage.Template{}, fmt.Errorf("%w: reading template file: %v", storage.ErrStorage, err)
+	}
+	return s.unmarshalTemplate(data)
+}
+
+// ListTemplates returns all templates sorted by name.
+func (s *Store) ListTemplates() ([]storage.Template, error) {
+	entries, err := os.ReadDir(s.templatesDir)
+	if err != nil {
+		return nil, fmt.Errorf("%w: reading templates dir: %v", storage.ErrStorage, err)
+	}
+	var templates []storage.Template
+	for _, de := range entries {
+		if de.IsDir() || !strings.HasSuffix(de.Name(), ".md") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(s.templatesDir, de.Name()))
+		if err != nil {
+			continue
+		}
+		tmpl, err := s.unmarshalTemplate(data)
+		if err != nil {
+			continue
+		}
+		templates = append(templates, tmpl)
+	}
+	sort.Slice(templates, func(i, j int) bool {
+		return templates[i].Name < templates[j].Name
+	})
+	return templates, nil
+}
+
+// UpdateTemplate modifies an existing template's name and content.
+func (s *Store) UpdateTemplate(id string, name string, content string) (storage.Template, error) {
+	// Find existing template by ID
+	existing, err := s.GetTemplate(id)
+	if err != nil {
+		return storage.Template{}, err
+	}
+
+	updated := existing
+	updated.Name = name
+	updated.Content = content
+	updated.UpdatedAt = time.Now().UTC()
+
+	// If name changed, remove old file
+	if existing.Name != name {
+		if err := entry.ValidateTemplateName(name); err != nil {
+			return storage.Template{}, fmt.Errorf("%w: %v", storage.ErrValidation, err)
+		}
+		// Check new name doesn't conflict
+		newPath := s.templatePath(name)
+		if _, err := os.Stat(newPath); err == nil {
+			return storage.Template{}, fmt.Errorf("%w: template %q already exists", storage.ErrConflict, name)
+		}
+		os.Remove(s.templatePath(existing.Name))
+	}
+
+	if err := s.atomicWrite(s.templatePath(name), s.marshalTemplate(updated)); err != nil {
+		return storage.Template{}, err
+	}
+	return updated, nil
+}
+
+// DeleteTemplate removes a template by ID.
+func (s *Store) DeleteTemplate(id string) error {
+	tmpl, err := s.GetTemplate(id)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(s.templatePath(tmpl.Name)); err != nil {
+		return fmt.Errorf("%w: deleting template file: %v", storage.ErrStorage, err)
+	}
+	return nil
 }
 
 // Delete removes an entry permanently.

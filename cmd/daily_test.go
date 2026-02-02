@@ -305,6 +305,42 @@ func TestDailyNonInteractiveManyEntries(t *testing.T) {
 	}
 }
 
+func TestDailyTemplateFilter(t *testing.T) {
+	setupTestEnv(t)
+
+	tmpl := createTestTemplate(t, "daily", "# Daily")
+
+	// Entry with template on jan 15
+	id1, _ := entry.NewID()
+	t1 := dateLocalAt(2026, 1, 15, 10, 0).UTC().Truncate(time.Second)
+	e1 := entry.Entry{
+		ID: id1, Content: "with template", CreatedAt: t1, UpdatedAt: t1,
+		Templates: []entry.TemplateRef{{TemplateID: tmpl.ID, TemplateName: "daily"}},
+	}
+	store.Create(e1)
+
+	// Entry without template on jan 16
+	createEntryAt(t, store, "no template", dateLocalAt(2026, 1, 16, 10, 0))
+
+	// Filter by template — should only return jan 15
+	days, err := store.ListDays(storage.ListDaysOptions{TemplateName: "daily"})
+	if err != nil {
+		t.Fatalf("ListDays: %v", err)
+	}
+	if len(days) != 1 {
+		t.Fatalf("expected 1 day, got %d", len(days))
+	}
+	if days[0].Date.Format("2006-01-02") != "2026-01-15" {
+		t.Errorf("day = %s, want 2026-01-15", days[0].Date.Format("2006-01-02"))
+	}
+
+	// Without filter returns both days
+	allDays, _ := store.ListDays(storage.ListDaysOptions{})
+	if len(allDays) != 2 {
+		t.Errorf("expected 2 days without filter, got %d", len(allDays))
+	}
+}
+
 func TestDailyEmptyDateRange(t *testing.T) {
 	// T026: Date range with no matching entries
 	setupTestEnv(t)
