@@ -313,8 +313,9 @@ func (s *Store) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, er
 	return summaries, rows.Err()
 }
 
-// Update modifies an existing entry's content.
-func (s *Store) Update(id string, content string) (entry.Entry, error) {
+// Update modifies an existing entry's content and optionally its template refs.
+// Pass nil for templates to preserve existing refs.
+func (s *Store) Update(id string, content string, templates []entry.TemplateRef) (entry.Entry, error) {
 	if err := entry.ValidateContent(content); err != nil {
 		return entry.Entry{}, fmt.Errorf("%w: %v", storage.ErrValidation, err)
 	}
@@ -341,6 +342,21 @@ func (s *Store) Update(id string, content string) (entry.Entry, error) {
 		content, now, id,
 	); err != nil {
 		return entry.Entry{}, fmt.Errorf("%w: updating entry: %v", storage.ErrStorage, err)
+	}
+
+	if templates != nil {
+		// Replace template refs
+		if _, err := tx.Exec("DELETE FROM entry_templates WHERE entry_id = ?", id); err != nil {
+			return entry.Entry{}, fmt.Errorf("%w: clearing template refs: %v", storage.ErrStorage, err)
+		}
+		for _, ref := range templates {
+			if _, err := tx.Exec(
+				"INSERT INTO entry_templates (entry_id, template_id, template_name) VALUES (?, ?, ?)",
+				id, ref.TemplateID, ref.TemplateName,
+			); err != nil {
+				return entry.Entry{}, fmt.Errorf("%w: inserting template ref: %v", storage.ErrStorage, err)
+			}
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

@@ -55,7 +55,7 @@ type Storage interface {
 	Get(id string) (entry.Entry, error)
 	List(opts ListOptions) ([]entry.Entry, error)
 	ListDays(opts ListDaysOptions) ([]DaySummary, error)
-	Update(id string, content string) (entry.Entry, error)
+	Update(id string, content string, templates []entry.TemplateRef) (entry.Entry, error)
 	Delete(id string) error
 	Close() error
 

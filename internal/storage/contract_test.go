@@ -200,7 +200,7 @@ func runContractTests(t *testing.T, name string, factory storageFactory) {
 				t.Fatalf("Create: %v", err)
 			}
 
-			updated, err := s.Update(e.ID, "new content")
+			updated, err := s.Update(e.ID, "new content", nil)
 			if err != nil {
 				t.Fatalf("Update: %v", err)
 			}
@@ -217,7 +217,7 @@ func runContractTests(t *testing.T, name string, factory storageFactory) {
 
 		t.Run("Update not found", func(t *testing.T) {
 			s := factory(t)
-			_, err := s.Update("nonexist", "new content")
+			_, err := s.Update("nonexist", "new content", nil)
 			if err != storage.ErrNotFound {
 				t.Errorf("expected ErrNotFound, got: %v", err)
 			}

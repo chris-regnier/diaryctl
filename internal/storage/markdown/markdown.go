@@ -372,8 +372,9 @@ func (s *Store) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, er
 	return summaries, nil
 }
 
-// Update modifies an existing entry's content.
-func (s *Store) Update(id string, content string) (entry.Entry, error) {
+// Update modifies an existing entry's content and optionally its template refs.
+// Pass nil for templates to preserve existing refs.
+func (s *Store) Update(id string, content string, templates []entry.TemplateRef) (entry.Entry, error) {
 	if err := entry.ValidateContent(content); err != nil {
 		return entry.Entry{}, fmt.Errorf("%w: %v", storage.ErrValidation, err)
 	}
@@ -395,6 +396,9 @@ func (s *Store) Update(id string, content string) (entry.Entry, error) {
 
 	e.Content = content
 	e.UpdatedAt = time.Now().UTC()
+	if templates != nil {
+		e.Templates = templates
+	}
 
 	if err := s.atomicWrite(path, s.marshal(e)); err != nil {
 		return entry.Entry{}, err
