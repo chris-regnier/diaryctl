@@ -84,6 +84,51 @@ func TestListEmptyMessage(t *testing.T) {
 	}
 }
 
+func TestListIDOnly(t *testing.T) {
+	setupTestEnv(t)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	var ids []string
+	for i := 0; i < 3; i++ {
+		id, _ := entry.NewID()
+		ids = append(ids, id)
+		e := entry.Entry{
+			ID:        id,
+			Content:   "Entry " + string(rune('A'+i)),
+			CreatedAt: now.Add(time.Duration(i) * time.Second),
+			UpdatedAt: now.Add(time.Duration(i) * time.Second),
+		}
+		if err := store.Create(e); err != nil {
+			t.Fatalf("Create %d: %v", i, err)
+		}
+	}
+
+	listIDOnly = true
+	t.Cleanup(func() { listIDOnly = false })
+
+	var buf bytes.Buffer
+	listCmd.SetOut(&buf)
+	if err := listCmd.RunE(listCmd, []string{}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 lines, got %d: %v", len(lines), lines)
+	}
+
+	// Each line should be one of the IDs we created
+	idSet := make(map[string]bool)
+	for _, id := range ids {
+		idSet[id] = true
+	}
+	for _, line := range lines {
+		if !idSet[strings.TrimSpace(line)] {
+			t.Errorf("unexpected ID in output: %q", line)
+		}
+	}
+}
+
 func TestListJSONOutput(t *testing.T) {
 	s := setupTestStore(t)
 

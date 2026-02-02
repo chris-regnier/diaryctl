@@ -11,6 +11,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var showIDOnly bool
+var showContentOnly bool
+
 var showCmd = &cobra.Command{
 	Use:   "show <id>",
 	Short: "Show a diary entry",
@@ -31,6 +34,15 @@ var showCmd = &cobra.Command{
 			os.Exit(2)
 		}
 
+		if showIDOnly {
+			fmt.Fprintln(cmd.OutOrStdout(), e.ID)
+			return nil
+		}
+		if showContentOnly {
+			fmt.Fprintln(cmd.OutOrStdout(), e.Content)
+			return nil
+		}
+
 		if jsonOutput {
 			ui.FormatJSON(os.Stdout, e)
 		} else {
@@ -44,5 +56,7 @@ var showCmd = &cobra.Command{
 }
 
 func init() {
+	showCmd.Flags().BoolVar(&showIDOnly, "id-only", false, "print just the entry ID")
+	showCmd.Flags().BoolVar(&showContentOnly, "content-only", false, "print just the entry content")
 	rootCmd.AddCommand(showCmd)
 }

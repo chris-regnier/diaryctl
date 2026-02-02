@@ -12,6 +12,7 @@ import (
 )
 
 var dateFilter string
+var listIDOnly bool
 
 var listCmd = &cobra.Command{
 	Use:   "list",
@@ -38,6 +39,13 @@ var listCmd = &cobra.Command{
 			os.Exit(2)
 		}
 
+		if listIDOnly {
+			for _, e := range entries {
+				fmt.Fprintln(cmd.OutOrStdout(), e.ID)
+			}
+			return nil
+		}
+
 		if jsonOutput {
 			summaries := ui.ToSummaries(entries)
 			ui.FormatJSON(os.Stdout, summaries)
@@ -53,5 +61,6 @@ var listCmd = &cobra.Command{
 
 func init() {
 	listCmd.Flags().StringVar(&dateFilter, "date", "", "filter by date (YYYY-MM-DD)")
+	listCmd.Flags().BoolVar(&listIDOnly, "id-only", false, "print just entry IDs, one per line")
 	rootCmd.AddCommand(listCmd)
 }
