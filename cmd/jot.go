@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chris-regnier/diaryctl/internal/daily"
+	"github.com/chris-regnier/diaryctl/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -44,11 +45,11 @@ If no entry exists for today, one is created automatically.`,
 			templateName = appConfig.DefaultTemplate
 		}
 
-		return jotRun(content, templateName)
+		return jotRun(os.Stdout, content, templateName)
 	},
 }
 
-func jotRun(content string, templateName string) error {
+func jotRun(w io.Writer, content string, templateName string) error {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return fmt.Errorf("jot: empty content")
@@ -69,8 +70,13 @@ func jotRun(content string, templateName string) error {
 		newContent = e.Content + "\n" + jotLine
 	}
 
-	if _, err := store.Update(e.ID, newContent); err != nil {
+	updated, err := store.Update(e.ID, newContent)
+	if err != nil {
 		return fmt.Errorf("updating entry: %w", err)
+	}
+
+	if jsonOutput {
+		return ui.FormatJSON(w, updated)
 	}
 
 	fmt.Fprintln(os.Stderr, jotLine)

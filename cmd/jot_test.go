@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"bytes"
+	"io"
 	"regexp"
 	"strings"
 	"testing"
@@ -18,7 +20,7 @@ func TestJotCreatesNewDailyEntry(t *testing.T) {
 	appConfig = &config.Config{}
 	appConfig.DefaultTemplate = ""
 
-	err := jotRun("bought groceries", "")
+	err := jotRun(io.Discard, "bought groceries", "")
 	if err != nil {
 		t.Fatalf("jotRun: %v", err)
 	}
@@ -45,7 +47,7 @@ func TestJotAppendsToExistingEntry(t *testing.T) {
 	}
 	originalContent := e.Content
 
-	err = jotRun("appended note", "")
+	err = jotRun(io.Discard, "appended note", "")
 	if err != nil {
 		t.Fatalf("jotRun: %v", err)
 	}
@@ -68,7 +70,7 @@ func TestJotTimestampFormat(t *testing.T) {
 	appConfig = &config.Config{}
 	appConfig.DefaultTemplate = ""
 
-	err := jotRun("check timestamp", "")
+	err := jotRun(io.Discard, "check timestamp", "")
 	if err != nil {
 		t.Fatalf("jotRun: %v", err)
 	}
@@ -96,7 +98,7 @@ func TestJotEmptyContentRejected(t *testing.T) {
 	appConfig = &config.Config{}
 	appConfig.DefaultTemplate = ""
 
-	err := jotRun("", "")
+	err := jotRun(io.Discard, "", "")
 	if err == nil {
 		t.Fatal("expected error for empty content, got nil")
 	}
@@ -112,7 +114,7 @@ func TestJotFromStdin(t *testing.T) {
 	appConfig.DefaultTemplate = ""
 
 	// Test that jotRun works with content (simulating what stdin would provide)
-	err := jotRun("stdin content here", "")
+	err := jotRun(io.Discard, "stdin content here", "")
 	if err != nil {
 		t.Fatalf("jotRun: %v", err)
 	}
@@ -146,7 +148,7 @@ func TestJotWithTemplateFlag(t *testing.T) {
 	_ = s.CreateTemplate(tmpl)
 
 	// Jot with explicit template
-	err = jotRun("hello world", "worklog")
+	err = jotRun(io.Discard, "hello world", "worklog")
 	if err != nil {
 		t.Fatalf("jotRun: %v", err)
 	}
@@ -159,5 +161,25 @@ func TestJotWithTemplateFlag(t *testing.T) {
 	}
 	if !strings.Contains(entries[0].Content, "hello world") {
 		t.Error("expected jot content appended")
+	}
+}
+
+func TestJotJSONOutput(t *testing.T) {
+	s := setupTestStore(t)
+	store = s
+	appConfig = &config.Config{}
+	jsonOutput = true
+	defer func() { jsonOutput = false }()
+
+	var buf bytes.Buffer
+	err := jotRun(&buf, "test note", "")
+	if err != nil {
+		t.Fatalf("jotRun: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"content"`) {
+		t.Error("expected JSON output")
+	}
+	if !strings.Contains(buf.String(), "test note") {
+		t.Error("expected jot content in JSON")
 	}
 }
