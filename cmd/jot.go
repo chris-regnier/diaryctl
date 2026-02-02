@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var jotTemplate string
+
 var jotCmd = &cobra.Command{
 	Use:   "jot [text...]",
 	Short: "Append a timestamped note to today's entry",
@@ -37,17 +39,22 @@ If no entry exists for today, one is created automatically.`,
 			return fmt.Errorf("jot requires text: diaryctl jot \"some text\"")
 		}
 
-		return jotRun(content)
+		templateName := jotTemplate
+		if templateName == "" {
+			templateName = appConfig.DefaultTemplate
+		}
+
+		return jotRun(content, templateName)
 	},
 }
 
-func jotRun(content string) error {
+func jotRun(content string, templateName string) error {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return fmt.Errorf("jot: empty content")
 	}
 
-	e, _, err := daily.GetOrCreateToday(store, appConfig.DefaultTemplate)
+	e, _, err := daily.GetOrCreateToday(store, templateName)
 	if err != nil {
 		return fmt.Errorf("getting today's entry: %w", err)
 	}
@@ -71,5 +78,6 @@ func jotRun(content string) error {
 }
 
 func init() {
+	jotCmd.Flags().StringVar(&jotTemplate, "template", "", "template to use when creating today's entry")
 	rootCmd.AddCommand(jotCmd)
 }

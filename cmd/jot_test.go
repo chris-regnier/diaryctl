@@ -8,6 +8,8 @@ import (
 
 	"github.com/chris-regnier/diaryctl/internal/config"
 	"github.com/chris-regnier/diaryctl/internal/daily"
+	"github.com/chris-regnier/diaryctl/internal/entry"
+	"github.com/chris-regnier/diaryctl/internal/storage"
 )
 
 func TestJotCreatesNewDailyEntry(t *testing.T) {
@@ -16,7 +18,7 @@ func TestJotCreatesNewDailyEntry(t *testing.T) {
 	appConfig = &config.Config{}
 	appConfig.DefaultTemplate = ""
 
-	err := jotRun("bought groceries")
+	err := jotRun("bought groceries", "")
 	if err != nil {
 		t.Fatalf("jotRun: %v", err)
 	}
@@ -43,7 +45,7 @@ func TestJotAppendsToExistingEntry(t *testing.T) {
 	}
 	originalContent := e.Content
 
-	err = jotRun("appended note")
+	err = jotRun("appended note", "")
 	if err != nil {
 		t.Fatalf("jotRun: %v", err)
 	}
@@ -66,7 +68,7 @@ func TestJotTimestampFormat(t *testing.T) {
 	appConfig = &config.Config{}
 	appConfig.DefaultTemplate = ""
 
-	err := jotRun("check timestamp")
+	err := jotRun("check timestamp", "")
 	if err != nil {
 		t.Fatalf("jotRun: %v", err)
 	}
@@ -94,7 +96,7 @@ func TestJotEmptyContentRejected(t *testing.T) {
 	appConfig = &config.Config{}
 	appConfig.DefaultTemplate = ""
 
-	err := jotRun("")
+	err := jotRun("", "")
 	if err == nil {
 		t.Fatal("expected error for empty content, got nil")
 	}
@@ -110,7 +112,7 @@ func TestJotFromStdin(t *testing.T) {
 	appConfig.DefaultTemplate = ""
 
 	// Test that jotRun works with content (simulating what stdin would provide)
-	err := jotRun("stdin content here")
+	err := jotRun("stdin content here", "")
 	if err != nil {
 		t.Fatalf("jotRun: %v", err)
 	}
@@ -121,5 +123,41 @@ func TestJotFromStdin(t *testing.T) {
 	}
 	if !strings.Contains(e.Content, "stdin content here") {
 		t.Errorf("expected content to contain 'stdin content here', got:\n%s", e.Content)
+	}
+}
+
+func TestJotWithTemplateFlag(t *testing.T) {
+	s := setupTestStore(t)
+	store = s
+	appConfig = &config.Config{}
+
+	// Create a template
+	tmplID, err := entry.NewID()
+	if err != nil {
+		t.Fatalf("NewID: %v", err)
+	}
+	tmpl := storage.Template{
+		ID:        tmplID,
+		Name:      "worklog",
+		Content:   "# Work Log\n\n",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	_ = s.CreateTemplate(tmpl)
+
+	// Jot with explicit template
+	err = jotRun("hello world", "worklog")
+	if err != nil {
+		t.Fatalf("jotRun: %v", err)
+	}
+
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	entries, _ := s.List(storage.ListOptions{Date: &today})
+	if !strings.Contains(entries[0].Content, "# Work Log") {
+		t.Error("expected template content in entry")
+	}
+	if !strings.Contains(entries[0].Content, "hello world") {
+		t.Error("expected jot content appended")
 	}
 }
