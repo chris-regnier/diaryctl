@@ -1,6 +1,7 @@
 package storage_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -47,6 +48,29 @@ func makeEntry(t *testing.T, content string) entry.Entry {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+}
+
+func makeEntryAt(t *testing.T, content string, at time.Time) entry.Entry {
+	t.Helper()
+	id, err := entry.NewID()
+	if err != nil {
+		t.Fatalf("generating ID: %v", err)
+	}
+	at = at.UTC().Truncate(time.Second)
+	return entry.Entry{
+		ID:        id,
+		Content:   content,
+		CreatedAt: at,
+		UpdatedAt: at,
+	}
+}
+
+func dateLocal(year int, month time.Month, day int) time.Time {
+	return time.Date(year, month, day, 0, 0, 0, 0, time.Local)
+}
+
+func dateLocalAt(year int, month time.Month, day, hour, min int) time.Time {
+	return time.Date(year, month, day, hour, min, 0, 0, time.Local)
 }
 
 func runContractTests(t *testing.T, name string, factory storageFactory) {
@@ -140,16 +164,11 @@ func runContractTests(t *testing.T, name string, factory storageFactory) {
 
 		t.Run("List date filter", func(t *testing.T) {
 			s := factory(t)
-			today := time.Now().UTC().Truncate(time.Second)
-			yesterday := today.Add(-24 * time.Hour)
+			jan15 := dateLocalAt(2026, 1, 15, 12, 0)
+			jan16 := dateLocalAt(2026, 1, 16, 12, 0)
 
-			e1 := makeEntry(t, "today entry")
-			e1.CreatedAt = today
-			e1.UpdatedAt = today
-
-			e2 := makeEntry(t, "yesterday entry")
-			e2.CreatedAt = yesterday
-			e2.UpdatedAt = yesterday
+			e1 := makeEntryAt(t, "jan15 entry", jan15)
+			e2 := makeEntryAt(t, "jan16 entry", jan16)
 
 			if err := s.Create(e1); err != nil {
 				t.Fatalf("Create e1: %v", err)
@@ -158,13 +177,13 @@ func runContractTests(t *testing.T, name string, factory storageFactory) {
 				t.Fatalf("Create e2: %v", err)
 			}
 
-			filterDate := today.Local()
+			filterDate := dateLocal(2026, 1, 15)
 			entries, err := s.List(storage.ListOptions{Date: &filterDate})
 			if err != nil {
 				t.Fatalf("List: %v", err)
 			}
 			if len(entries) != 1 {
-				t.Fatalf("expected 1 entry for today, got %d", len(entries))
+				t.Fatalf("expected 1 entry for jan15, got %d", len(entries))
 			}
 			if entries[0].ID != e1.ID {
 				t.Errorf("expected entry %s, got %s", e1.ID, entries[0].ID)
@@ -240,6 +259,278 @@ func runContractTests(t *testing.T, name string, factory storageFactory) {
 				if err := s.Create(e); err != nil {
 					t.Fatalf("Create %d: %v", i, err)
 				}
+			}
+		})
+
+		// TC-01: ListDays empty store
+		t.Run("ListDays empty store", func(t *testing.T) {
+			s := factory(t)
+			days, err := s.ListDays(storage.ListDaysOptions{})
+			if err != nil {
+				t.Fatalf("ListDays: %v", err)
+			}
+			if len(days) != 0 {
+				t.Errorf("expected empty slice, got %d", len(days))
+			}
+		})
+
+		// TC-02: ListDays single day
+		t.Run("ListDays single day", func(t *testing.T) {
+			s := factory(t)
+			jan15_9 := dateLocalAt(2026, 1, 15, 9, 0)
+			jan15_12 := dateLocalAt(2026, 1, 15, 12, 0)
+			jan15_15 := dateLocalAt(2026, 1, 15, 15, 0)
+
+			for _, at := range []time.Time{jan15_9, jan15_12, jan15_15} {
+				e := makeEntryAt(t, "entry at "+at.Format("15:04"), at)
+				if err := s.Create(e); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+			}
+
+			days, err := s.ListDays(storage.ListDaysOptions{})
+			if err != nil {
+				t.Fatalf("ListDays: %v", err)
+			}
+			if len(days) != 1 {
+				t.Fatalf("expected 1 day, got %d", len(days))
+			}
+			if days[0].Count != 3 {
+				t.Errorf("count = %d, want 3", days[0].Count)
+			}
+			if days[0].Date.Format("2006-01-02") != "2026-01-15" {
+				t.Errorf("date = %s, want 2026-01-15", days[0].Date.Format("2006-01-02"))
+			}
+		})
+
+		// TC-03: ListDays multiple days
+		t.Run("ListDays multiple days", func(t *testing.T) {
+			s := factory(t)
+			dates := []time.Time{
+				dateLocalAt(2026, 1, 10, 12, 0),
+				dateLocalAt(2026, 1, 12, 12, 0),
+				dateLocalAt(2026, 1, 15, 12, 0),
+			}
+			for _, at := range dates {
+				e := makeEntryAt(t, "entry on "+at.Format("2006-01-02"), at)
+				if err := s.Create(e); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+			}
+
+			days, err := s.ListDays(storage.ListDaysOptions{})
+			if err != nil {
+				t.Fatalf("ListDays: %v", err)
+			}
+			if len(days) != 3 {
+				t.Fatalf("expected 3 days, got %d", len(days))
+			}
+			// Reverse chronological
+			if days[0].Date.Format("2006-01-02") != "2026-01-15" {
+				t.Errorf("first day = %s, want 2026-01-15", days[0].Date.Format("2006-01-02"))
+			}
+			if days[1].Date.Format("2006-01-02") != "2026-01-12" {
+				t.Errorf("second day = %s, want 2026-01-12", days[1].Date.Format("2006-01-02"))
+			}
+			if days[2].Date.Format("2006-01-02") != "2026-01-10" {
+				t.Errorf("third day = %s, want 2026-01-10", days[2].Date.Format("2006-01-02"))
+			}
+		})
+
+		// TC-04: ListDays with StartDate
+		t.Run("ListDays with StartDate", func(t *testing.T) {
+			s := factory(t)
+			for _, d := range []int{10, 12, 15} {
+				e := makeEntryAt(t, "entry", dateLocalAt(2026, 1, d, 12, 0))
+				if err := s.Create(e); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+			}
+			start := dateLocal(2026, 1, 12)
+			days, err := s.ListDays(storage.ListDaysOptions{StartDate: &start})
+			if err != nil {
+				t.Fatalf("ListDays: %v", err)
+			}
+			if len(days) != 2 {
+				t.Fatalf("expected 2 days, got %d", len(days))
+			}
+			if days[0].Date.Format("2006-01-02") != "2026-01-15" {
+				t.Errorf("first = %s, want 2026-01-15", days[0].Date.Format("2006-01-02"))
+			}
+		})
+
+		// TC-05: ListDays with EndDate
+		t.Run("ListDays with EndDate", func(t *testing.T) {
+			s := factory(t)
+			for _, d := range []int{10, 12, 15} {
+				e := makeEntryAt(t, "entry", dateLocalAt(2026, 1, d, 12, 0))
+				if err := s.Create(e); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+			}
+			end := dateLocal(2026, 1, 12)
+			days, err := s.ListDays(storage.ListDaysOptions{EndDate: &end})
+			if err != nil {
+				t.Fatalf("ListDays: %v", err)
+			}
+			if len(days) != 2 {
+				t.Fatalf("expected 2 days, got %d", len(days))
+			}
+			if days[0].Date.Format("2006-01-02") != "2026-01-12" {
+				t.Errorf("first = %s, want 2026-01-12", days[0].Date.Format("2006-01-02"))
+			}
+		})
+
+		// TC-06: ListDays with both StartDate and EndDate
+		t.Run("ListDays with date range", func(t *testing.T) {
+			s := factory(t)
+			for _, d := range []int{10, 12, 15} {
+				e := makeEntryAt(t, "entry", dateLocalAt(2026, 1, d, 12, 0))
+				if err := s.Create(e); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+			}
+			start := dateLocal(2026, 1, 11)
+			end := dateLocal(2026, 1, 14)
+			days, err := s.ListDays(storage.ListDaysOptions{StartDate: &start, EndDate: &end})
+			if err != nil {
+				t.Fatalf("ListDays: %v", err)
+			}
+			if len(days) != 1 {
+				t.Fatalf("expected 1 day, got %d", len(days))
+			}
+			if days[0].Date.Format("2006-01-02") != "2026-01-12" {
+				t.Errorf("day = %s, want 2026-01-12", days[0].Date.Format("2006-01-02"))
+			}
+		})
+
+		// TC-07: ListDays date range with no entries
+		t.Run("ListDays empty range", func(t *testing.T) {
+			s := factory(t)
+			for _, d := range []int{10, 15} {
+				e := makeEntryAt(t, "entry", dateLocalAt(2026, 1, d, 12, 0))
+				if err := s.Create(e); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+			}
+			start := dateLocal(2026, 1, 11)
+			end := dateLocal(2026, 1, 14)
+			days, err := s.ListDays(storage.ListDaysOptions{StartDate: &start, EndDate: &end})
+			if err != nil {
+				t.Fatalf("ListDays: %v", err)
+			}
+			if len(days) != 0 {
+				t.Errorf("expected empty, got %d", len(days))
+			}
+		})
+
+		// TC-08: ListDays preview content
+		t.Run("ListDays preview content", func(t *testing.T) {
+			s := factory(t)
+			earlier := makeEntryAt(t, "First", dateLocalAt(2026, 1, 15, 9, 0))
+			later := makeEntryAt(t, "Second entry with more text", dateLocalAt(2026, 1, 15, 15, 0))
+
+			if err := s.Create(earlier); err != nil {
+				t.Fatalf("Create earlier: %v", err)
+			}
+			if err := s.Create(later); err != nil {
+				t.Fatalf("Create later: %v", err)
+			}
+
+			days, err := s.ListDays(storage.ListDaysOptions{})
+			if err != nil {
+				t.Fatalf("ListDays: %v", err)
+			}
+			if len(days) != 1 {
+				t.Fatalf("expected 1 day, got %d", len(days))
+			}
+			if !strings.Contains(days[0].Preview, "Second") {
+				t.Errorf("preview = %q, want content from most recent entry", days[0].Preview)
+			}
+		})
+
+		// TC-09: List with StartDate only
+		t.Run("List with StartDate", func(t *testing.T) {
+			s := factory(t)
+			e1 := makeEntryAt(t, "jan10", dateLocalAt(2026, 1, 10, 12, 0))
+			e2 := makeEntryAt(t, "jan15a", dateLocalAt(2026, 1, 15, 10, 0))
+			e3 := makeEntryAt(t, "jan15b", dateLocalAt(2026, 1, 15, 14, 0))
+			for _, e := range []entry.Entry{e1, e2, e3} {
+				if err := s.Create(e); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+			}
+			start := dateLocal(2026, 1, 12)
+			entries, err := s.List(storage.ListOptions{StartDate: &start})
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			if len(entries) != 2 {
+				t.Fatalf("expected 2 entries, got %d", len(entries))
+			}
+		})
+
+		// TC-10: List with EndDate only
+		t.Run("List with EndDate", func(t *testing.T) {
+			s := factory(t)
+			e1 := makeEntryAt(t, "jan10", dateLocalAt(2026, 1, 10, 12, 0))
+			e2 := makeEntryAt(t, "jan15", dateLocalAt(2026, 1, 15, 12, 0))
+			for _, e := range []entry.Entry{e1, e2} {
+				if err := s.Create(e); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+			}
+			end := dateLocal(2026, 1, 12)
+			entries, err := s.List(storage.ListOptions{EndDate: &end})
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			if len(entries) != 1 {
+				t.Fatalf("expected 1 entry, got %d", len(entries))
+			}
+			if entries[0].ID != e1.ID {
+				t.Errorf("expected %s, got %s", e1.ID, entries[0].ID)
+			}
+		})
+
+		// TC-11: List with date range
+		t.Run("List with date range", func(t *testing.T) {
+			s := factory(t)
+			for _, d := range []int{10, 12, 15} {
+				e := makeEntryAt(t, "jan"+string(rune('0'+d)), dateLocalAt(2026, 1, d, 12, 0))
+				if err := s.Create(e); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+			}
+			start := dateLocal(2026, 1, 11)
+			end := dateLocal(2026, 1, 13)
+			entries, err := s.List(storage.ListOptions{StartDate: &start, EndDate: &end})
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			if len(entries) != 1 {
+				t.Fatalf("expected 1 entry, got %d", len(entries))
+			}
+		})
+
+		// TC-12: Date takes precedence over range
+		t.Run("List Date precedence over range", func(t *testing.T) {
+			s := factory(t)
+			for _, d := range []int{10, 12, 15} {
+				e := makeEntryAt(t, "entry", dateLocalAt(2026, 1, d, 12, 0))
+				if err := s.Create(e); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+			}
+			dateFilter := dateLocal(2026, 1, 12)
+			start := dateLocal(2026, 1, 10)
+			end := dateLocal(2026, 1, 15)
+			entries, err := s.List(storage.ListOptions{Date: &dateFilter, StartDate: &start, EndDate: &end})
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			if len(entries) != 1 {
+				t.Fatalf("expected 1 entry (Date wins), got %d", len(entries))
 			}
 		})
 	})

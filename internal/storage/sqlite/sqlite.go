@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/chris-regnier/diaryctl/internal/entry"
@@ -119,10 +120,25 @@ func (s *Store) Get(id string) (entry.Entry, error) {
 func (s *Store) List(opts storage.ListOptions) ([]entry.Entry, error) {
 	query := "SELECT id, content, created_at, updated_at FROM entries"
 	var args []interface{}
+	var conditions []string
 
 	if opts.Date != nil {
-		query += " WHERE date(created_at) = date(?)"
+		// Date takes precedence over range
+		conditions = append(conditions, "date(created_at, 'localtime') = ?")
 		args = append(args, opts.Date.Format("2006-01-02"))
+	} else {
+		if opts.StartDate != nil {
+			conditions = append(conditions, "date(created_at, 'localtime') >= ?")
+			args = append(args, opts.StartDate.Format("2006-01-02"))
+		}
+		if opts.EndDate != nil {
+			conditions = append(conditions, "date(created_at, 'localtime') <= ?")
+			args = append(args, opts.EndDate.Format("2006-01-02"))
+		}
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	query += " ORDER BY created_at DESC"
@@ -157,6 +173,70 @@ func (s *Store) List(opts storage.ListOptions) ([]entry.Entry, error) {
 	}
 
 	return entries, rows.Err()
+}
+
+// ListDays returns aggregated day summaries grouped by date.
+func (s *Store) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, error) {
+	query := `SELECT date(created_at, 'localtime') as day, COUNT(*) as cnt,
+		(SELECT content FROM entries e2 WHERE date(e2.created_at, 'localtime') = date(entries.created_at, 'localtime') ORDER BY e2.created_at DESC LIMIT 1) as preview
+		FROM entries`
+	var args []interface{}
+	var conditions []string
+
+	if opts.StartDate != nil {
+		conditions = append(conditions, "date(created_at, 'localtime') >= ?")
+		args = append(args, opts.StartDate.Format("2006-01-02"))
+	}
+	if opts.EndDate != nil {
+		conditions = append(conditions, "date(created_at, 'localtime') <= ?")
+		args = append(args, opts.EndDate.Format("2006-01-02"))
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	query += " GROUP BY date(created_at, 'localtime') ORDER BY day DESC"
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: listing days: %v", storage.ErrStorage, err)
+	}
+	defer rows.Close()
+
+	var summaries []storage.DaySummary
+	for rows.Next() {
+		var dayStr, preview string
+		var count int
+		if err := rows.Scan(&dayStr, &count, &preview); err != nil {
+			return nil, fmt.Errorf("%w: scanning day row: %v", storage.ErrStorage, err)
+		}
+		// libSQL's date() may return "YYYY-MM-DD" or "YYYY-MM-DDT00:00:00Z"
+		dateStr := dayStr
+		if len(dateStr) > 10 {
+			dateStr = dateStr[:10]
+		}
+		date, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)
+		if err != nil {
+			return nil, fmt.Errorf("%w: parsing date: %v", storage.ErrStorage, err)
+		}
+		// Truncate preview to 80 chars, single line
+		preview = strings.ReplaceAll(preview, "\n", " ")
+		if len(preview) > 80 {
+			preview = preview[:80]
+		}
+		summaries = append(summaries, storage.DaySummary{
+			Date:    date,
+			Count:   count,
+			Preview: preview,
+		})
+	}
+
+	if summaries == nil {
+		summaries = []storage.DaySummary{}
+	}
+
+	return summaries, rows.Err()
 }
 
 // Update modifies an existing entry's content.

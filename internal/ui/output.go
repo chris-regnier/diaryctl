@@ -87,3 +87,64 @@ type DeleteResult struct {
 	ID      string `json:"id"`
 	Deleted bool   `json:"deleted"`
 }
+
+// DayGroupJSON is the JSON representation of a daily aggregate.
+type DayGroupJSON struct {
+	Date    string         `json:"date"`
+	Count   int            `json:"count"`
+	Entries []EntrySummary `json:"entries"`
+}
+
+// BuildDayGroups creates DayGroupJSON slices from entries grouped by day.
+func BuildDayGroups(days []DayEntries) []DayGroupJSON {
+	groups := make([]DayGroupJSON, len(days))
+	for i, d := range days {
+		entries := make([]EntrySummary, len(d.Entries))
+		for j, e := range d.Entries {
+			entries[j] = EntrySummary{
+				ID:        e.ID,
+				Preview:   e.Preview(80),
+				CreatedAt: e.CreatedAt,
+				UpdatedAt: e.UpdatedAt,
+			}
+		}
+		groups[i] = DayGroupJSON{
+			Date:    d.Date.Format("2006-01-02"),
+			Count:   len(d.Entries),
+			Entries: entries,
+		}
+	}
+	return groups
+}
+
+// DayEntries pairs a date with its entries for formatting.
+type DayEntries struct {
+	Date    time.Time
+	Entries []entry.Entry
+}
+
+// FormatDailySummary formats grouped-by-day entries as plain text.
+func FormatDailySummary(w io.Writer, days []DayEntries) {
+	if len(days) == 0 {
+		fmt.Fprintln(w, "No diary entries found.")
+		return
+	}
+	for i, d := range days {
+		label := "entries"
+		if len(d.Entries) == 1 {
+			label = "entry"
+		}
+		fmt.Fprintf(w, "── %s (%d %s) ──────────\n",
+			d.Date.Format("2006-01-02"), len(d.Entries), label)
+		for _, e := range d.Entries {
+			fmt.Fprintf(w, "  %s  %s  %s\n",
+				e.ID,
+				e.CreatedAt.Local().Format("15:04"),
+				e.Preview(80),
+			)
+		}
+		if i < len(days)-1 {
+			fmt.Fprintln(w)
+		}
+	}
+}

@@ -15,6 +15,12 @@ import (
 	"github.com/chris-regnier/diaryctl/internal/storage"
 )
 
+// localDate returns the local midnight for the given time.
+func localDate(t time.Time) time.Time {
+	y, m, d := t.Local().Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
+}
+
 // Store implements storage.Storage using Markdown files with YAML front-matter.
 type Store struct {
 	baseDir string // e.g. ~/.diaryctl/entries/
@@ -196,12 +202,25 @@ func (s *Store) List(opts storage.ListOptions) ([]entry.Entry, error) {
 			return nil // skip malformed files
 		}
 
-		// Date filter
+		entryDate := localDate(e.CreatedAt)
+
+		// Date filter (takes precedence over range)
 		if opts.Date != nil {
-			entryDate := e.CreatedAt.Local().Truncate(24 * time.Hour)
-			filterDate := opts.Date.Truncate(24 * time.Hour)
+			filterDate := localDate(*opts.Date)
 			if !entryDate.Equal(filterDate) {
 				return nil
+			}
+		} else {
+			// Date range filters
+			if opts.StartDate != nil {
+				if entryDate.Before(localDate(*opts.StartDate)) {
+					return nil
+				}
+			}
+			if opts.EndDate != nil {
+				if entryDate.After(localDate(*opts.EndDate)) {
+					return nil
+				}
 			}
 		}
 
@@ -230,6 +249,85 @@ func (s *Store) List(opts storage.ListOptions) ([]entry.Entry, error) {
 	}
 
 	return entries, nil
+}
+
+// ListDays returns aggregated day summaries by scanning the directory tree.
+func (s *Store) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, error) {
+	type dayData struct {
+		date   time.Time
+		count  int
+		newest entry.Entry
+	}
+	days := make(map[string]*dayData)
+
+	err := filepath.WalkDir(s.baseDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+
+		e, err := s.unmarshal(data)
+		if err != nil {
+			return nil
+		}
+
+		entryDate := localDate(e.CreatedAt)
+
+		// Apply date range filters
+		if opts.StartDate != nil {
+			if entryDate.Before(localDate(*opts.StartDate)) {
+				return nil
+			}
+		}
+		if opts.EndDate != nil {
+			if entryDate.After(localDate(*opts.EndDate)) {
+				return nil
+			}
+		}
+
+		key := entryDate.Format("2006-01-02")
+		dd, exists := days[key]
+		if !exists {
+			dd = &dayData{date: entryDate}
+			days[key] = dd
+		}
+		dd.count++
+		if dd.newest.ID == "" || e.CreatedAt.After(dd.newest.CreatedAt) {
+			dd.newest = e
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: scanning entries: %v", storage.ErrStorage, err)
+	}
+
+	summaries := make([]storage.DaySummary, 0, len(days))
+	for _, dd := range days {
+		preview := strings.ReplaceAll(dd.newest.Content, "\n", " ")
+		if len(preview) > 80 {
+			preview = preview[:80]
+		}
+		summaries = append(summaries, storage.DaySummary{
+			Date:    dd.date,
+			Count:   dd.count,
+			Preview: preview,
+		})
+	}
+
+	// Sort reverse chronological
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].Date.After(summaries[j].Date)
+	})
+
+	return summaries, nil
 }
 
 // Update modifies an existing entry's content.
