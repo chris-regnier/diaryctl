@@ -126,3 +126,43 @@ func TestGetOrCreateToday_BadDefaultTemplateWarns(t *testing.T) {
 		t.Errorf("expected default content %q, got %q", wantContent, e.Content)
 	}
 }
+
+func TestGetOrCreateToday_MultipleEntries_ReturnsNewest(t *testing.T) {
+	s := testStore(t)
+
+	now := time.Now().UTC()
+	oldID, err := entry.NewID()
+	if err != nil {
+		t.Fatalf("NewID: %v", err)
+	}
+	old := entry.Entry{
+		ID:        oldID,
+		Content:   "older entry",
+		CreatedAt: now.Add(-1 * time.Hour),
+		UpdatedAt: now.Add(-1 * time.Hour),
+	}
+	newerID, err := entry.NewID()
+	if err != nil {
+		t.Fatalf("NewID: %v", err)
+	}
+	newer := entry.Entry{
+		ID:        newerID,
+		Content:   "newer entry",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	_ = s.Create(old)
+	_ = s.Create(newer)
+
+	got, created, err := GetOrCreateToday(s, "")
+	if err != nil {
+		t.Fatalf("GetOrCreateToday: %v", err)
+	}
+	if created {
+		t.Error("expected created=false")
+	}
+	// Should return the newest entry for today (List returns DESC by created_at, Limit 1)
+	if got.ID != newer.ID {
+		t.Errorf("expected newest entry %q, got %q", newer.ID, got.ID)
+	}
+}
