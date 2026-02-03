@@ -104,9 +104,9 @@ func (m *mockContextStore) CreateContext(c storage.Context) error {
 
 func TestResolveActiveContexts_empty(t *testing.T) {
 	ms := &mockContextStore{contexts: map[string]storage.Context{}}
-	refs, err := ResolveActiveContexts(nil, nil, ms)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	refs, warnings := ResolveActiveContexts(nil, nil, ms)
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", warnings)
 	}
 	if len(refs) != 0 {
 		t.Errorf("expected 0 refs, got %d", len(refs))
@@ -115,9 +115,9 @@ func TestResolveActiveContexts_empty(t *testing.T) {
 
 func TestResolveActiveContexts_manualOnly(t *testing.T) {
 	ms := &mockContextStore{contexts: map[string]storage.Context{}}
-	refs, err := ResolveActiveContexts(nil, []string{"sprint:23"}, ms)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	refs, warnings := ResolveActiveContexts(nil, []string{"sprint:23"}, ms)
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", warnings)
 	}
 	if len(refs) != 1 || refs[0].ContextName != "sprint:23" {
 		t.Errorf("got refs %v", refs)
@@ -132,9 +132,9 @@ func TestResolveActiveContexts_resolverOnly(t *testing.T) {
 	resolvers := []ContextResolver{
 		&stubResolver{name: "git", names: []string{"feature/auth"}},
 	}
-	refs, err := ResolveActiveContexts(resolvers, nil, ms)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	refs, warnings := ResolveActiveContexts(resolvers, nil, ms)
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", warnings)
 	}
 	if len(refs) != 1 || refs[0].ContextName != "feature/auth" {
 		t.Errorf("got refs %v", refs)
@@ -146,9 +146,9 @@ func TestResolveActiveContexts_deduplicates(t *testing.T) {
 	resolvers := []ContextResolver{
 		&stubResolver{name: "git", names: []string{"feature/auth"}},
 	}
-	refs, err := ResolveActiveContexts(resolvers, []string{"feature/auth"}, ms)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	refs, warnings := ResolveActiveContexts(resolvers, []string{"feature/auth"}, ms)
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", warnings)
 	}
 	if len(refs) != 1 {
 		t.Errorf("expected 1 deduplicated ref, got %d", len(refs))
@@ -160,9 +160,9 @@ func TestResolveActiveContexts_skipsFailedResolver(t *testing.T) {
 	resolvers := []ContextResolver{
 		&stubResolver{name: "git", names: nil, err: fmt.Errorf("not a git repo")},
 	}
-	refs, err := ResolveActiveContexts(resolvers, []string{"sprint:23"}, ms)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	refs, warnings := ResolveActiveContexts(resolvers, []string{"sprint:23"}, ms)
+	if len(warnings) != 1 {
+		t.Errorf("expected 1 warning, got %v", warnings)
 	}
 	if len(refs) != 1 || refs[0].ContextName != "sprint:23" {
 		t.Errorf("got refs %v", refs)
@@ -172,9 +172,9 @@ func TestResolveActiveContexts_skipsFailedResolver(t *testing.T) {
 func TestResolveActiveContexts_reusesExisting(t *testing.T) {
 	existing := storage.Context{ID: "existing1", Name: "sprint:23", Source: "manual"}
 	ms := &mockContextStore{contexts: map[string]storage.Context{"sprint:23": existing}}
-	refs, err := ResolveActiveContexts(nil, []string{"sprint:23"}, ms)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	refs, warnings := ResolveActiveContexts(nil, []string{"sprint:23"}, ms)
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", warnings)
 	}
 	if len(refs) != 1 || refs[0].ContextID != "existing1" {
 		t.Errorf("expected existing context ID, got %v", refs)

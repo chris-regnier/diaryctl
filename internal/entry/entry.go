@@ -16,6 +16,7 @@ const (
 
 var idPattern = regexp.MustCompile(`^[a-z0-9]{8}$`)
 var templateNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+var contextNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_/-]*$`)
 
 // TemplateRef is a lightweight reference to a template, stored on entries for attribution.
 type TemplateRef struct {
@@ -64,6 +65,15 @@ func ValidateContent(content string) error {
 func ValidateTemplateName(name string) error {
 	if !templateNamePattern.MatchString(name) {
 		return fmt.Errorf("invalid template name %q: must be lowercase alphanumeric, hyphens, underscores", name)
+	}
+	return nil
+}
+
+// ValidateContextName checks whether a context name is valid.
+// Context names allow slashes (for git branches like "feature/auth") and mixed case.
+func ValidateContextName(name string) error {
+	if !contextNamePattern.MatchString(name) {
+		return fmt.Errorf("invalid context name %q: must start with alphanumeric, may contain alphanumeric, hyphens, underscores, slashes", name)
 	}
 	return nil
 }

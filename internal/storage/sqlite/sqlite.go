@@ -554,6 +554,9 @@ func (s *Store) DeleteTemplate(id string) error {
 
 // CreateContext persists a new context.
 func (s *Store) CreateContext(c storage.Context) error {
+	if err := entry.ValidateContextName(c.Name); err != nil {
+		return fmt.Errorf("%w: %v", storage.ErrValidation, err)
+	}
 	_, err := s.db.Exec(
 		"INSERT INTO contexts (id, name, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
 		c.ID, c.Name, c.Source,

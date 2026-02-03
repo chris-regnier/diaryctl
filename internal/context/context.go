@@ -1,6 +1,7 @@
 package context
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -31,17 +32,20 @@ type ContextStore interface {
 
 // ResolveActiveContexts gathers contexts from resolvers and manual list,
 // deduplicates, and ensures each exists in storage (creating if needed).
-// Failed resolvers are silently skipped.
+// Returns resolved context refs and a slice of warning messages.
+// Warnings are informational only and never block entry creation.
 func ResolveActiveContexts(
 	resolvers []ContextResolver,
 	manualContexts []string,
 	store ContextStore,
-) ([]entry.ContextRef, error) {
+) ([]entry.ContextRef, []string) {
 	seen := make(map[string]string) // name -> source
+	var warnings []string
 
 	for _, r := range resolvers {
 		names, err := r.Resolve()
 		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("resolver %q failed: %v", r.Name(), err))
 			continue
 		}
 		for _, name := range names {
@@ -60,7 +64,7 @@ func ResolveActiveContexts(
 	}
 
 	if len(seen) == 0 {
-		return nil, nil
+		return nil, warnings
 	}
 
 	var refs []entry.ContextRef
@@ -70,6 +74,7 @@ func ResolveActiveContexts(
 			// Auto-create
 			id, idErr := entry.NewID()
 			if idErr != nil {
+				warnings = append(warnings, fmt.Sprintf("failed to generate ID for context %q: %v", name, idErr))
 				continue
 			}
 			now := time.Now().UTC()
@@ -81,6 +86,7 @@ func ResolveActiveContexts(
 				UpdatedAt: now,
 			}
 			if createErr := store.CreateContext(c); createErr != nil {
+				warnings = append(warnings, fmt.Sprintf("failed to create context %q: %v", name, createErr))
 				continue
 			}
 		}
@@ -94,7 +100,7 @@ func ResolveActiveContexts(
 		return refs[i].ContextName < refs[j].ContextName
 	})
 
-	return refs, nil
+	return refs, warnings
 }
 
 // ComposeContent assembles the editor buffer from provider output and template content.

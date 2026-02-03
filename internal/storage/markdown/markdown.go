@@ -654,6 +654,9 @@ func (s *Store) contextPath(id string) string {
 
 // CreateContext persists a new context as a JSON file.
 func (s *Store) CreateContext(c storage.Context) error {
+	if err := entry.ValidateContextName(c.Name); err != nil {
+		return fmt.Errorf("%w: %v", storage.ErrValidation, err)
+	}
 	// Check for duplicate name
 	if _, err := s.GetContextByName(c.Name); err == nil {
 		return fmt.Errorf("%w: context %q already exists", storage.ErrConflict, c.Name)
@@ -720,17 +723,16 @@ func (s *Store) ListContexts() ([]storage.Context, error) {
 }
 
 // DeleteContext removes a context by ID and detaches it from all entries.
+// To avoid orphaned references, we detach from all entries first, then delete the context file.
 func (s *Store) DeleteContext(id string) error {
 	path := s.contextPath(id)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return storage.ErrNotFound
 	}
-	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("%w: deleting context file: %v", storage.ErrStorage, err)
-	}
 
-	// Detach from all entries that reference this context.
-	_ = filepath.WalkDir(s.baseDir, func(p string, d fs.DirEntry, err error) error {
+	// First, detach from all entries that reference this context.
+	// If this fails partway through, the context still exists and can be retried.
+	walkErr := filepath.WalkDir(s.baseDir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
 			return nil
 		}
@@ -750,10 +752,20 @@ func (s *Store) DeleteContext(id string) error {
 		}
 		if len(filtered) != len(e.Contexts) {
 			e.Contexts = filtered
-			_ = s.atomicWrite(p, s.marshal(e))
+			if writeErr := s.atomicWrite(p, s.marshal(e)); writeErr != nil {
+				return writeErr
+			}
 		}
 		return nil
 	})
+	if walkErr != nil {
+		return fmt.Errorf("%w: detaching context from entries: %v", storage.ErrStorage, walkErr)
+	}
+
+	// After successfully detaching from all entries, delete the context file.
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("%w: deleting context file: %v", storage.ErrStorage, err)
+	}
 
 	return nil
 }
