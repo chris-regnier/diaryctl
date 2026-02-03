@@ -14,6 +14,7 @@ import (
 var (
 	dateFilter         string
 	listTemplateFilter string
+	listContextFilter  string
 	listIDOnly         bool
 )
 
@@ -39,6 +40,10 @@ var listCmd = &cobra.Command{
 
 		if listTemplateFilter != "" {
 			opts.TemplateName = listTemplateFilter
+		}
+
+		if listContextFilter != "" {
+			opts.ContextName = listContextFilter
 		}
 
 		entries, err := store.List(opts)
@@ -70,6 +75,7 @@ var listCmd = &cobra.Command{
 func init() {
 	listCmd.Flags().StringVar(&dateFilter, "date", "", "filter by date (YYYY-MM-DD)")
 	listCmd.Flags().StringVar(&listTemplateFilter, "template", "", "filter by template name")
+	listCmd.Flags().StringVar(&listContextFilter, "context", "", "filter by context name")
 	listCmd.Flags().BoolVar(&listIDOnly, "id-only", false, "print just entry IDs, one per line")
 	rootCmd.AddCommand(listCmd)
 }
