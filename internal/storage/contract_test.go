@@ -730,6 +730,248 @@ func runAttributionContractTests(t *testing.T, name string, factory storageFacto
 	})
 }
 
+func makeContext(t *testing.T, name, source string) storage.Context {
+	t.Helper()
+	id, err := entry.NewID()
+	if err != nil {
+		t.Fatalf("generating ID: %v", err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	return storage.Context{
+		ID:        id,
+		Name:      name,
+		Source:    source,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+func runContextContractTests(t *testing.T, name string, factory storageFactory) {
+	t.Run(name+" Context CRUD", func(t *testing.T) {
+
+		t.Run("CreateContext and GetContext", func(t *testing.T) {
+			s := factory(t)
+			ctx := makeContext(t, "feature/auth", "git")
+			err := s.CreateContext(ctx)
+			if err != nil {
+				t.Fatalf("CreateContext: %v", err)
+			}
+			got, err := s.GetContext(ctx.ID)
+			if err != nil {
+				t.Fatalf("GetContext: %v", err)
+			}
+			if got.Name != "feature/auth" || got.Source != "git" {
+				t.Errorf("got name=%q source=%q", got.Name, got.Source)
+			}
+		})
+
+		t.Run("GetContextByName", func(t *testing.T) {
+			s := factory(t)
+			ctx := makeContext(t, "feature/login", "manual")
+			_ = s.CreateContext(ctx)
+			got, err := s.GetContextByName("feature/login")
+			if err != nil {
+				t.Fatalf("GetContextByName: %v", err)
+			}
+			if got.ID != ctx.ID {
+				t.Errorf("got ID=%q want %q", got.ID, ctx.ID)
+			}
+		})
+
+		t.Run("GetContextByName not found", func(t *testing.T) {
+			s := factory(t)
+			_, err := s.GetContextByName("nonexistent")
+			if !errors.Is(err, storage.ErrNotFound) {
+				t.Errorf("expected ErrNotFound, got %v", err)
+			}
+		})
+
+		t.Run("CreateContext duplicate name", func(t *testing.T) {
+			s := factory(t)
+			ctx1 := makeContext(t, "feature/auth", "git")
+			ctx2 := makeContext(t, "feature/auth", "manual")
+			_ = s.CreateContext(ctx1)
+			err := s.CreateContext(ctx2)
+			if !errors.Is(err, storage.ErrConflict) {
+				t.Errorf("expected ErrConflict, got %v", err)
+			}
+		})
+
+		t.Run("ListContexts", func(t *testing.T) {
+			s := factory(t)
+			_ = s.CreateContext(makeContext(t, "alpha", "git"))
+			_ = s.CreateContext(makeContext(t, "beta", "manual"))
+			_ = s.CreateContext(makeContext(t, "gamma", "git"))
+			list, err := s.ListContexts()
+			if err != nil {
+				t.Fatalf("ListContexts: %v", err)
+			}
+			if len(list) != 3 {
+				t.Errorf("got %d contexts, want 3", len(list))
+			}
+		})
+
+		t.Run("DeleteContext", func(t *testing.T) {
+			s := factory(t)
+			ctx := makeContext(t, "feature/auth", "git")
+			_ = s.CreateContext(ctx)
+			err := s.DeleteContext(ctx.ID)
+			if err != nil {
+				t.Fatalf("DeleteContext: %v", err)
+			}
+			_, err = s.GetContext(ctx.ID)
+			if !errors.Is(err, storage.ErrNotFound) {
+				t.Errorf("expected ErrNotFound after delete, got %v", err)
+			}
+		})
+
+		t.Run("DeleteContext not found", func(t *testing.T) {
+			s := factory(t)
+			err := s.DeleteContext("nonexist")
+			if !errors.Is(err, storage.ErrNotFound) {
+				t.Errorf("expected ErrNotFound, got %v", err)
+			}
+		})
+
+		t.Run("AttachContext and load on Get", func(t *testing.T) {
+			s := factory(t)
+			ctx := makeContext(t, "feature/auth", "git")
+			_ = s.CreateContext(ctx)
+
+			e := makeEntry(t, "working on auth")
+			_ = s.Create(e)
+
+			err := s.AttachContext(e.ID, ctx.ID)
+			if err != nil {
+				t.Fatalf("AttachContext: %v", err)
+			}
+
+			got, err := s.Get(e.ID)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if len(got.Contexts) != 1 || got.Contexts[0].ContextName != "feature/auth" {
+				t.Errorf("expected 1 context ref 'feature/auth', got %v", got.Contexts)
+			}
+		})
+
+		t.Run("AttachContext idempotent", func(t *testing.T) {
+			s := factory(t)
+			ctx := makeContext(t, "feature/auth", "git")
+			_ = s.CreateContext(ctx)
+
+			e := makeEntry(t, "working on auth")
+			_ = s.Create(e)
+
+			_ = s.AttachContext(e.ID, ctx.ID)
+			err := s.AttachContext(e.ID, ctx.ID)
+			if err != nil {
+				t.Fatalf("second AttachContext: %v", err)
+			}
+
+			got, err := s.Get(e.ID)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if len(got.Contexts) != 1 {
+				t.Errorf("expected 1 context ref after duplicate attach, got %d", len(got.Contexts))
+			}
+		})
+
+		t.Run("DetachContext", func(t *testing.T) {
+			s := factory(t)
+			ctx := makeContext(t, "feature/auth", "git")
+			_ = s.CreateContext(ctx)
+
+			e := makeEntry(t, "working on auth")
+			_ = s.Create(e)
+
+			_ = s.AttachContext(e.ID, ctx.ID)
+			err := s.DetachContext(e.ID, ctx.ID)
+			if err != nil {
+				t.Fatalf("DetachContext: %v", err)
+			}
+
+			got, err := s.Get(e.ID)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if len(got.Contexts) != 0 {
+				t.Errorf("expected 0 context refs after detach, got %d", len(got.Contexts))
+			}
+		})
+
+		t.Run("Create entry with context refs", func(t *testing.T) {
+			s := factory(t)
+			ctx := makeContext(t, "feature/auth", "git")
+			_ = s.CreateContext(ctx)
+
+			e := makeEntry(t, "hello world")
+			e.Contexts = []entry.ContextRef{
+				{ContextID: ctx.ID, ContextName: ctx.Name},
+			}
+			err := s.Create(e)
+			if err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+			got, err := s.Get(e.ID)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if len(got.Contexts) != 1 || got.Contexts[0].ContextName != "feature/auth" {
+				t.Errorf("expected 1 context ref 'feature/auth', got %v", got.Contexts)
+			}
+		})
+
+		t.Run("List filtered by context name", func(t *testing.T) {
+			s := factory(t)
+			ctx := makeContext(t, "feature/auth", "git")
+			_ = s.CreateContext(ctx)
+
+			e1 := makeEntry(t, "with context")
+			e1.Contexts = []entry.ContextRef{
+				{ContextID: ctx.ID, ContextName: ctx.Name},
+			}
+			_ = s.Create(e1)
+
+			e2 := makeEntry(t, "without context")
+			_ = s.Create(e2)
+
+			opts := storage.ListOptions{ContextName: "feature/auth"}
+			results, err := s.List(opts)
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			if len(results) != 1 || results[0].ID != e1.ID {
+				t.Errorf("expected 1 entry with context 'feature/auth', got %d", len(results))
+			}
+		})
+
+		t.Run("DeleteContext detaches from entries", func(t *testing.T) {
+			s := factory(t)
+			ctx := makeContext(t, "feature/auth", "git")
+			_ = s.CreateContext(ctx)
+
+			e := makeEntry(t, "working on auth")
+			_ = s.Create(e)
+			_ = s.AttachContext(e.ID, ctx.ID)
+
+			err := s.DeleteContext(ctx.ID)
+			if err != nil {
+				t.Fatalf("DeleteContext: %v", err)
+			}
+
+			got, err := s.Get(e.ID)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if len(got.Contexts) != 0 {
+				t.Errorf("expected 0 context refs after context deletion, got %d", len(got.Contexts))
+			}
+		})
+	})
+}
+
 func isValidationError(err error) bool {
 	return err != nil && (err == storage.ErrValidation ||
 		(err.Error() != "" && containsValidation(err)))
@@ -753,10 +995,12 @@ func TestMarkdownStorage(t *testing.T) {
 	runContractTests(t, "Markdown", markdownFactory)
 	runTemplateContractTests(t, "Markdown", markdownFactory)
 	runAttributionContractTests(t, "Markdown", markdownFactory)
+	runContextContractTests(t, "Markdown", markdownFactory)
 }
 
 func TestSQLiteStorage(t *testing.T) {
 	runContractTests(t, "SQLite", sqliteFactory)
 	runTemplateContractTests(t, "SQLite", sqliteFactory)
 	runAttributionContractTests(t, "SQLite", sqliteFactory)
+	runContextContractTests(t, "SQLite", sqliteFactory)
 }

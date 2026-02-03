@@ -719,7 +719,7 @@ func (s *Store) ListContexts() ([]storage.Context, error) {
 	return contexts, nil
 }
 
-// DeleteContext removes a context by ID.
+// DeleteContext removes a context by ID and detaches it from all entries.
 func (s *Store) DeleteContext(id string) error {
 	path := s.contextPath(id)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -728,6 +728,33 @@ func (s *Store) DeleteContext(id string) error {
 	if err := os.Remove(path); err != nil {
 		return fmt.Errorf("%w: deleting context file: %v", storage.ErrStorage, err)
 	}
+
+	// Detach from all entries that reference this context.
+	_ = filepath.WalkDir(s.baseDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return nil
+		}
+		e, err := s.unmarshal(data)
+		if err != nil {
+			return nil
+		}
+		var filtered []entry.ContextRef
+		for _, ref := range e.Contexts {
+			if ref.ContextID != id {
+				filtered = append(filtered, ref)
+			}
+		}
+		if len(filtered) != len(e.Contexts) {
+			e.Contexts = filtered
+			_ = s.atomicWrite(p, s.marshal(e))
+		}
+		return nil
+	})
+
 	return nil
 }
 
