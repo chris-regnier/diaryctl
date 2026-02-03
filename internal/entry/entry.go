@@ -23,6 +23,12 @@ type TemplateRef struct {
 	TemplateName string `json:"template_name"`
 }
 
+// ContextRef is a lightweight reference to a context, stored on entries for grouping.
+type ContextRef struct {
+	ContextID   string `json:"context_id"`
+	ContextName string `json:"context_name"`
+}
+
 // Entry represents a single diary entry.
 type Entry struct {
 	ID        string        `json:"id"`
@@ -30,6 +36,7 @@ type Entry struct {
 	CreatedAt time.Time     `json:"created_at"`
 	UpdatedAt time.Time     `json:"updated_at"`
 	Templates []TemplateRef `json:"templates,omitempty"`
+	Contexts  []ContextRef  `json:"contexts,omitempty"`
 }
 
 // NewID generates a new nanoid for an entry.
