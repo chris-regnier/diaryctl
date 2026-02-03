@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chris-regnier/diaryctl/internal/context/datetime"
+	gitctx "github.com/chris-regnier/diaryctl/internal/context/git"
 	"github.com/chris-regnier/diaryctl/internal/entry"
 	"github.com/chris-regnier/diaryctl/internal/storage"
 )
@@ -120,4 +122,31 @@ func ComposeContent(providers []ContentProvider, templateContent string) string 
 	default:
 		return providerText + "\n\n" + templateContent
 	}
+}
+
+var contentProviders = map[string]func() ContentProvider{
+	"datetime": func() ContentProvider { return datetime.New() },
+	"git":      func() ContentProvider { return gitctx.NewContentProvider() },
+}
+
+var contextResolvers = map[string]func() ContextResolver{
+	"git": func() ContextResolver { return gitctx.NewContextResolver() },
+}
+
+// LookupContentProvider returns a content provider by name, or nil if unknown.
+func LookupContentProvider(name string) ContentProvider {
+	factory, ok := contentProviders[name]
+	if !ok {
+		return nil
+	}
+	return factory()
+}
+
+// LookupContextResolver returns a context resolver by name, or nil if unknown.
+func LookupContextResolver(name string) ContextResolver {
+	factory, ok := contextResolvers[name]
+	if !ok {
+		return nil
+	}
+	return factory()
 }

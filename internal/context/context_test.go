@@ -180,3 +180,47 @@ func TestResolveActiveContexts_reusesExisting(t *testing.T) {
 		t.Errorf("expected existing context ID, got %v", refs)
 	}
 }
+
+func TestLookupContentProvider(t *testing.T) {
+	p := LookupContentProvider("datetime")
+	if p == nil {
+		t.Fatal("expected datetime provider")
+	}
+	if p.Name() != "datetime" {
+		t.Errorf("got name %q", p.Name())
+	}
+}
+
+func TestLookupContentProvider_git(t *testing.T) {
+	p := LookupContentProvider("git")
+	if p == nil {
+		t.Fatal("expected git provider")
+	}
+	if p.Name() != "git" {
+		t.Errorf("got name %q", p.Name())
+	}
+}
+
+func TestLookupContentProvider_unknown(t *testing.T) {
+	p := LookupContentProvider("nonexistent")
+	if p != nil {
+		t.Errorf("expected nil for unknown provider")
+	}
+}
+
+func TestLookupContextResolver(t *testing.T) {
+	r := LookupContextResolver("git")
+	if r == nil {
+		t.Fatal("expected git resolver")
+	}
+	if r.Name() != "git" {
+		t.Errorf("got name %q", r.Name())
+	}
+}
+
+func TestLookupContextResolver_unknown(t *testing.T) {
+	r := LookupContextResolver("nonexistent")
+	if r != nil {
+		t.Errorf("expected nil for unknown resolver")
+	}
+}
