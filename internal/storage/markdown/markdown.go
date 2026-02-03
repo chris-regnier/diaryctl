@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -25,6 +26,7 @@ func localDate(t time.Time) time.Time {
 type Store struct {
 	baseDir      string // e.g. ~/.diaryctl/entries/
 	templatesDir string // e.g. ~/.diaryctl/templates/
+	contextsDir  string // e.g. ~/.diaryctl/contexts/
 }
 
 // New creates a new Markdown file storage backend.
@@ -37,7 +39,11 @@ func New(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(templatesDir, 0755); err != nil {
 		return nil, fmt.Errorf("%w: creating templates directory: %v", storage.ErrStorage, err)
 	}
-	return &Store{baseDir: entriesDir, templatesDir: templatesDir}, nil
+	contextsDir := filepath.Join(dataDir, "contexts")
+	if err := os.MkdirAll(contextsDir, 0755); err != nil {
+		return nil, fmt.Errorf("%w: creating contexts directory: %v", storage.ErrStorage, err)
+	}
+	return &Store{baseDir: entriesDir, templatesDir: templatesDir, contextsDir: contextsDir}, nil
 }
 
 // Close is a no-op for the Markdown backend.
@@ -63,6 +69,13 @@ func (s *Store) marshal(e entry.Entry) []byte {
 			fmt.Fprintf(&b, "    template_name: %s\n", ref.TemplateName)
 		}
 	}
+	if len(e.Contexts) > 0 {
+		b.WriteString("contexts:\n")
+		for _, ref := range e.Contexts {
+			fmt.Fprintf(&b, "  - context_id: %s\n", ref.ContextID)
+			fmt.Fprintf(&b, "    context_name: %s\n", ref.ContextName)
+		}
+	}
 	b.WriteString("---\n\n")
 	b.WriteString(e.Content)
 	return []byte(b.String())
@@ -73,11 +86,17 @@ type fmTemplateRef struct {
 	TemplateName string `yaml:"template_name"`
 }
 
+type fmContextRef struct {
+	ContextID   string `yaml:"context_id"`
+	ContextName string `yaml:"context_name"`
+}
+
 type frontMatter struct {
 	ID        string          `yaml:"id"`
 	CreatedAt string          `yaml:"created_at"`
 	UpdatedAt string          `yaml:"updated_at"`
 	Templates []fmTemplateRef `yaml:"templates"`
+	Contexts  []fmContextRef  `yaml:"contexts"`
 }
 
 func (s *Store) unmarshal(data []byte) (entry.Entry, error) {
@@ -104,12 +123,21 @@ func (s *Store) unmarshal(data []byte) (entry.Entry, error) {
 		})
 	}
 
+	var contexts []entry.ContextRef
+	for _, ref := range fm.Contexts {
+		contexts = append(contexts, entry.ContextRef{
+			ContextID:   ref.ContextID,
+			ContextName: ref.ContextName,
+		})
+	}
+
 	return entry.Entry{
 		ID:        fm.ID,
 		Content:   strings.TrimSpace(string(content)),
 		CreatedAt: createdAt,
 		UpdatedAt: updatedAt,
 		Templates: templates,
+		Contexts:  contexts,
 	}, nil
 }
 
@@ -262,6 +290,20 @@ func (s *Store) List(opts storage.ListOptions) ([]entry.Entry, error) {
 				}
 			}
 			if !found {
+				return nil
+			}
+		}
+
+		// Context name filter
+		if opts.ContextName != "" {
+			matched := false
+			for _, ref := range e.Contexts {
+				if ref.ContextName == opts.ContextName {
+					matched = true
+					break
+				}
+			}
+			if !matched {
 				return nil
 			}
 		}
@@ -602,4 +644,143 @@ func (s *Store) Delete(id string) error {
 	}
 
 	return nil
+}
+
+// --- Context methods ---
+
+func (s *Store) contextPath(id string) string {
+	return filepath.Join(s.contextsDir, id+".json")
+}
+
+// CreateContext persists a new context as a JSON file.
+func (s *Store) CreateContext(c storage.Context) error {
+	// Check for duplicate name
+	if _, err := s.GetContextByName(c.Name); err == nil {
+		return fmt.Errorf("%w: context %q already exists", storage.ErrConflict, c.Name)
+	}
+	data, err := json.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("%w: marshalling context: %v", storage.ErrStorage, err)
+	}
+	return s.atomicWrite(s.contextPath(c.ID), data)
+}
+
+// GetContext retrieves a context by ID.
+func (s *Store) GetContext(id string) (storage.Context, error) {
+	data, err := os.ReadFile(s.contextPath(id))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return storage.Context{}, storage.ErrNotFound
+		}
+		return storage.Context{}, fmt.Errorf("%w: reading context file: %v", storage.ErrStorage, err)
+	}
+	var c storage.Context
+	if err := json.Unmarshal(data, &c); err != nil {
+		return storage.Context{}, fmt.Errorf("%w: unmarshalling context: %v", storage.ErrStorage, err)
+	}
+	return c, nil
+}
+
+// GetContextByName retrieves a context by name.
+func (s *Store) GetContextByName(name string) (storage.Context, error) {
+	contexts, err := s.ListContexts()
+	if err != nil {
+		return storage.Context{}, err
+	}
+	for _, c := range contexts {
+		if c.Name == name {
+			return c, nil
+		}
+	}
+	return storage.Context{}, storage.ErrNotFound
+}
+
+// ListContexts returns all contexts sorted by name.
+func (s *Store) ListContexts() ([]storage.Context, error) {
+	entries, err := os.ReadDir(s.contextsDir)
+	if err != nil {
+		return nil, fmt.Errorf("%w: reading contexts dir: %v", storage.ErrStorage, err)
+	}
+	var contexts []storage.Context
+	for _, de := range entries {
+		if de.IsDir() || !strings.HasSuffix(de.Name(), ".json") {
+			continue
+		}
+		id := strings.TrimSuffix(de.Name(), ".json")
+		c, err := s.GetContext(id)
+		if err != nil {
+			continue
+		}
+		contexts = append(contexts, c)
+	}
+	sort.Slice(contexts, func(i, j int) bool {
+		return contexts[i].Name < contexts[j].Name
+	})
+	return contexts, nil
+}
+
+// DeleteContext removes a context by ID.
+func (s *Store) DeleteContext(id string) error {
+	path := s.contextPath(id)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return storage.ErrNotFound
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("%w: deleting context file: %v", storage.ErrStorage, err)
+	}
+	return nil
+}
+
+// AttachContext adds a context reference to an entry's frontmatter.
+func (s *Store) AttachContext(entryID string, contextID string) error {
+	e, err := s.Get(entryID)
+	if err != nil {
+		return err
+	}
+
+	// Check if already attached (idempotent)
+	for _, ref := range e.Contexts {
+		if ref.ContextID == contextID {
+			return nil
+		}
+	}
+
+	// Get context to obtain name
+	c, err := s.GetContext(contextID)
+	if err != nil {
+		return err
+	}
+
+	e.Contexts = append(e.Contexts, entry.ContextRef{
+		ContextID:   c.ID,
+		ContextName: c.Name,
+	})
+
+	path, err := s.findEntryPath(entryID)
+	if err != nil {
+		return err
+	}
+	return s.atomicWrite(path, s.marshal(e))
+}
+
+// DetachContext removes a context reference from an entry's frontmatter.
+func (s *Store) DetachContext(entryID string, contextID string) error {
+	e, err := s.Get(entryID)
+	if err != nil {
+		return err
+	}
+
+	filtered := make([]entry.ContextRef, 0, len(e.Contexts))
+	for _, ref := range e.Contexts {
+		if ref.ContextID != contextID {
+			filtered = append(filtered, ref)
+		}
+	}
+	e.Contexts = filtered
+
+	path, err := s.findEntryPath(entryID)
+	if err != nil {
+		return err
+	}
+	return s.atomicWrite(path, s.marshal(e))
 }
