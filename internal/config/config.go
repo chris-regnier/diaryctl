@@ -12,7 +12,9 @@ type Config struct {
 	Storage         string `mapstructure:"storage"`
 	DataDir         string `mapstructure:"data_dir"`
 	Editor          string `mapstructure:"editor"`
-	DefaultTemplate string `mapstructure:"default_template"`
+	DefaultTemplate  string   `mapstructure:"default_template"`
+	ContextProviders []string `mapstructure:"context_providers"`
+	ContextResolvers []string `mapstructure:"context_resolvers"`
 }
 
 // DefaultDataDir returns the default data directory (~/.diaryctl/).
@@ -33,6 +35,8 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("data_dir", DefaultDataDir())
 	v.SetDefault("editor", "")
 	v.SetDefault("default_template", "")
+	v.SetDefault("context_providers", []string{})
+	v.SetDefault("context_resolvers", []string{})
 
 	// Config file
 	if configPath != "" {
