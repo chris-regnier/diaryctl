@@ -43,6 +43,13 @@ func FormatEntryFull(w io.Writer, e entry.Entry) {
 		}
 		fmt.Fprintf(w, "Templates: %s\n", strings.Join(names, ", "))
 	}
+	if len(e.Contexts) > 0 {
+		names := make([]string, len(e.Contexts))
+		for i, ref := range e.Contexts {
+			names[i] = ref.ContextName
+		}
+		fmt.Fprintf(w, "Contexts: %s\n", strings.Join(names, ", "))
+	}
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, e.Content)
 }
@@ -151,6 +158,40 @@ func BuildDayGroups(days []DayEntries) []DayGroupJSON {
 type DayEntries struct {
 	Date    time.Time
 	Entries []entry.Entry
+}
+
+// FormatContextList formats a list of contexts.
+func FormatContextList(w io.Writer, contexts []storage.Context) {
+	if len(contexts) == 0 {
+		fmt.Fprintln(w, "No contexts found.")
+		return
+	}
+	for _, c := range contexts {
+		fmt.Fprintf(w, "%s  %s  %s  %s\n", c.Name, c.Source, c.ID, c.UpdatedAt.Local().Format("2006-01-02 15:04"))
+	}
+}
+
+// FormatContextFull formats full details of a context.
+func FormatContextFull(w io.Writer, c storage.Context) {
+	fmt.Fprintf(w, "Context: %s\n", c.Name)
+	fmt.Fprintf(w, "ID: %s\n", c.ID)
+	fmt.Fprintf(w, "Source: %s\n", c.Source)
+	fmt.Fprintf(w, "Created: %s\n", c.CreatedAt.Local().Format("2006-01-02 15:04"))
+	fmt.Fprintf(w, "Modified: %s\n", c.UpdatedAt.Local().Format("2006-01-02 15:04"))
+}
+
+// FormatActiveContexts formats the currently active contexts.
+func FormatActiveContexts(w io.Writer, manual []string, auto []string) {
+	if len(manual) == 0 && len(auto) == 0 {
+		fmt.Fprintln(w, "No active contexts.")
+		return
+	}
+	if len(manual) > 0 {
+		fmt.Fprintf(w, "manual:  %s\n", strings.Join(manual, ", "))
+	}
+	if len(auto) > 0 {
+		fmt.Fprintf(w, "auto:    %s\n", strings.Join(auto, ", "))
+	}
 }
 
 // FormatDailySummary formats grouped-by-day entries as plain text.
