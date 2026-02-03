@@ -31,6 +31,7 @@ Use --no-template to skip the default template.`,
   diaryctl create
   diaryctl create --template daily
   diaryctl create --template daily,prompts`,
+	PostRunE: invalidateCachePostRun,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		templateFlag, _ := cmd.Flags().GetString("template")
 		noTemplate, _ := cmd.Flags().GetBool("no-template")

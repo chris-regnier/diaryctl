@@ -21,7 +21,8 @@ var editCmd = &cobra.Command{
 Use --template to append template content to the entry.`,
 	Example: `  diaryctl edit a3kf9x2m
   diaryctl edit a3kf9x2m --template prompts`,
-	Args: cobra.ExactArgs(1),
+	Args:     cobra.ExactArgs(1),
+	PostRunE: invalidateCachePostRun,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
 		templateFlag, _ := cmd.Flags().GetString("template")

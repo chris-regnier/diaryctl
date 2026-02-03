@@ -24,6 +24,7 @@ If no entry exists for today, one is created automatically.`,
 	Example: `  diaryctl jot "bought groceries"
   diaryctl jot meeting went well
   echo "note from pipe" | diaryctl jot -`,
+	PostRunE: invalidateCachePostRun,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var content string
 

@@ -7,12 +7,23 @@ import (
 	"github.com/spf13/viper"
 )
 
+// ShellConfig holds shell integration configuration.
+type ShellConfig struct {
+	CacheTTL    string `mapstructure:"cache_ttl"`
+	TodayIcon   string `mapstructure:"today_icon"`
+	NoTodayIcon string `mapstructure:"no_today_icon"`
+	StreakIcon   string `mapstructure:"streak_icon"`
+	ShowContext bool   `mapstructure:"show_context"`
+	ShowBackend bool   `mapstructure:"show_backend"`
+}
+
 // Config holds the application configuration.
 type Config struct {
-	Storage         string `mapstructure:"storage"`
-	DataDir         string `mapstructure:"data_dir"`
-	Editor          string `mapstructure:"editor"`
-	DefaultTemplate string `mapstructure:"default_template"`
+	Storage         string      `mapstructure:"storage"`
+	DataDir         string      `mapstructure:"data_dir"`
+	Editor          string      `mapstructure:"editor"`
+	DefaultTemplate string      `mapstructure:"default_template"`
+	Shell           ShellConfig `mapstructure:"shell"`
 }
 
 // DefaultDataDir returns the default data directory (~/.diaryctl/).
@@ -33,6 +44,12 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("data_dir", DefaultDataDir())
 	v.SetDefault("editor", "")
 	v.SetDefault("default_template", "")
+	v.SetDefault("shell.cache_ttl", "5m")
+	v.SetDefault("shell.today_icon", "✓")
+	v.SetDefault("shell.no_today_icon", "✗")
+	v.SetDefault("shell.streak_icon", "🔥")
+	v.SetDefault("shell.show_context", true)
+	v.SetDefault("shell.show_backend", false)
 
 	// Config file
 	if configPath != "" {

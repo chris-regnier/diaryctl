@@ -18,7 +18,8 @@ var deleteCmd = &cobra.Command{
 	Long:  "Permanently delete a diary entry. Requires confirmation unless --force is used.",
 	Example: `  diaryctl delete a3kf9x2m
   diaryctl delete a3kf9x2m --force`,
-	Args: cobra.ExactArgs(1),
+	Args:     cobra.ExactArgs(1),
+	PostRunE: invalidateCachePostRun,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
 
