@@ -70,6 +70,18 @@ func createSchema(db *sql.DB) error {
 			template_name TEXT NOT NULL,
 			PRIMARY KEY (entry_id, template_id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS contexts (
+			id         TEXT PRIMARY KEY,
+			name       TEXT NOT NULL UNIQUE,
+			source     TEXT NOT NULL DEFAULT 'manual',
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS entry_contexts (
+			entry_id    TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+			context_id  TEXT NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
+			PRIMARY KEY (entry_id, context_id)
+		)`,
 	}
 	for _, stmt := range statements {
 		if _, err := db.Exec(stmt); err != nil {
@@ -117,6 +129,16 @@ func (s *Store) Create(e entry.Entry) error {
 		}
 	}
 
+	for _, ref := range e.Contexts {
+		_, err = tx.Exec(
+			"INSERT OR IGNORE INTO entry_contexts (entry_id, context_id) VALUES (?, ?)",
+			e.ID, ref.ContextID,
+		)
+		if err != nil {
+			return fmt.Errorf("%w: inserting context ref: %v", storage.ErrStorage, err)
+		}
+	}
+
 	return tx.Commit()
 }
 
@@ -152,6 +174,13 @@ func (s *Store) Get(id string) (entry.Entry, error) {
 	}
 	e.Templates = refs
 
+	// Load context refs
+	ctxRefs, err := s.loadContextRefs(id)
+	if err != nil {
+		return entry.Entry{}, err
+	}
+	e.Contexts = ctxRefs
+
 	return e, nil
 }
 
@@ -186,6 +215,12 @@ func (s *Store) List(opts storage.ListOptions) ([]entry.Entry, error) {
 		query += " JOIN entry_templates et ON et.entry_id = entries.id"
 		conditions = append(conditions, "et.template_name = ?")
 		args = append(args, opts.TemplateName)
+	}
+
+	if opts.ContextName != "" {
+		query += " JOIN entry_contexts ec ON ec.entry_id = entries.id JOIN contexts ctx ON ctx.id = ec.context_id"
+		conditions = append(conditions, "ctx.name = ?")
+		args = append(args, opts.ContextName)
 	}
 
 	if opts.Date != nil {
@@ -238,6 +273,13 @@ func (s *Store) List(opts storage.ListOptions) ([]entry.Entry, error) {
 			return nil, err
 		}
 		e.Templates = refs
+
+		// Load context refs
+		ctxRefs, err := s.loadContextRefs(e.ID)
+		if err != nil {
+			return nil, err
+		}
+		e.Contexts = ctxRefs
 
 		entries = append(entries, e)
 	}
@@ -506,6 +548,148 @@ func (s *Store) DeleteTemplate(id string) error {
 		return storage.ErrNotFound
 	}
 	return nil
+}
+
+// --- Context methods ---
+
+// CreateContext persists a new context.
+func (s *Store) CreateContext(c storage.Context) error {
+	_, err := s.db.Exec(
+		"INSERT INTO contexts (id, name, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		c.ID, c.Name, c.Source,
+		c.CreatedAt.UTC().Format(time.RFC3339),
+		c.UpdatedAt.UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			return fmt.Errorf("%w: context %q already exists", storage.ErrConflict, c.Name)
+		}
+		return fmt.Errorf("%w: inserting context: %v", storage.ErrStorage, err)
+	}
+	return nil
+}
+
+// GetContext retrieves a context by ID.
+func (s *Store) GetContext(id string) (storage.Context, error) {
+	row := s.db.QueryRow(
+		"SELECT id, name, source, created_at, updated_at FROM contexts WHERE id = ?", id,
+	)
+	return s.scanContext(row)
+}
+
+// GetContextByName retrieves a context by name.
+func (s *Store) GetContextByName(name string) (storage.Context, error) {
+	row := s.db.QueryRow(
+		"SELECT id, name, source, created_at, updated_at FROM contexts WHERE name = ?", name,
+	)
+	return s.scanContext(row)
+}
+
+func (s *Store) scanContext(row *sql.Row) (storage.Context, error) {
+	var c storage.Context
+	var createdStr, updatedStr string
+	if err := row.Scan(&c.ID, &c.Name, &c.Source, &createdStr, &updatedStr); err != nil {
+		if err == sql.ErrNoRows {
+			return storage.Context{}, storage.ErrNotFound
+		}
+		return storage.Context{}, fmt.Errorf("%w: scanning context: %v", storage.ErrStorage, err)
+	}
+	var err error
+	c.CreatedAt, err = time.Parse(time.RFC3339, createdStr)
+	if err != nil {
+		return storage.Context{}, fmt.Errorf("%w: parsing created_at: %v", storage.ErrStorage, err)
+	}
+	c.UpdatedAt, err = time.Parse(time.RFC3339, updatedStr)
+	if err != nil {
+		return storage.Context{}, fmt.Errorf("%w: parsing updated_at: %v", storage.ErrStorage, err)
+	}
+	return c, nil
+}
+
+// ListContexts returns all contexts sorted by name.
+func (s *Store) ListContexts() ([]storage.Context, error) {
+	rows, err := s.db.Query(
+		"SELECT id, name, source, created_at, updated_at FROM contexts ORDER BY name",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: listing contexts: %v", storage.ErrStorage, err)
+	}
+	defer rows.Close()
+
+	var contexts []storage.Context
+	for rows.Next() {
+		var c storage.Context
+		var createdStr, updatedStr string
+		if err := rows.Scan(&c.ID, &c.Name, &c.Source, &createdStr, &updatedStr); err != nil {
+			return nil, fmt.Errorf("%w: scanning context row: %v", storage.ErrStorage, err)
+		}
+		c.CreatedAt, _ = time.Parse(time.RFC3339, createdStr)
+		c.UpdatedAt, _ = time.Parse(time.RFC3339, updatedStr)
+		contexts = append(contexts, c)
+	}
+	return contexts, rows.Err()
+}
+
+// DeleteContext removes a context by ID.
+func (s *Store) DeleteContext(id string) error {
+	result, err := s.db.Exec("DELETE FROM contexts WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("%w: deleting context: %v", storage.ErrStorage, err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%w: checking rows affected: %v", storage.ErrStorage, err)
+	}
+	if rows == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
+// AttachContext links an entry to a context.
+func (s *Store) AttachContext(entryID string, contextID string) error {
+	_, err := s.db.Exec(
+		"INSERT OR IGNORE INTO entry_contexts (entry_id, context_id) VALUES (?, ?)",
+		entryID, contextID,
+	)
+	if err != nil {
+		return fmt.Errorf("%w: attaching context: %v", storage.ErrStorage, err)
+	}
+	return nil
+}
+
+// DetachContext removes the link between an entry and a context.
+func (s *Store) DetachContext(entryID string, contextID string) error {
+	_, err := s.db.Exec(
+		"DELETE FROM entry_contexts WHERE entry_id = ? AND context_id = ?",
+		entryID, contextID,
+	)
+	if err != nil {
+		return fmt.Errorf("%w: detaching context: %v", storage.ErrStorage, err)
+	}
+	return nil
+}
+
+// loadContextRefs loads context references for an entry.
+func (s *Store) loadContextRefs(entryID string) ([]entry.ContextRef, error) {
+	rows, err := s.db.Query(
+		"SELECT c.id, c.name FROM entry_contexts ec JOIN contexts c ON c.id = ec.context_id WHERE ec.entry_id = ?",
+		entryID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: querying context refs: %v", storage.ErrStorage, err)
+	}
+	defer rows.Close()
+
+	var refs []entry.ContextRef
+	for rows.Next() {
+		var ref entry.ContextRef
+		if err := rows.Scan(&ref.ContextID, &ref.ContextName); err != nil {
+			return nil, fmt.Errorf("%w: scanning context ref: %v", storage.ErrStorage, err)
+		}
+		refs = append(refs, ref)
+	}
+	return refs, rows.Err()
 }
 
 // Delete removes an entry permanently.
