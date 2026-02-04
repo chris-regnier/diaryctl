@@ -36,6 +36,36 @@ func (m *mockStorage) Get(id string) (entry.Entry, error) {
 	return entry.Entry{}, storage.ErrNotFound
 }
 
+// Write methods (stubs for test - not used by current tests)
+func (m *mockStorage) Create(e entry.Entry) error {
+	return nil
+}
+
+func (m *mockStorage) Update(id string, content string, templates []entry.TemplateRef) (entry.Entry, error) {
+	return entry.Entry{}, nil
+}
+
+func (m *mockStorage) Delete(id string) error {
+	return nil
+}
+
+// Context methods (stubs for test - not used by current tests)
+func (m *mockStorage) ListContexts() ([]storage.Context, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) CreateContext(c storage.Context) error {
+	return nil
+}
+
+func (m *mockStorage) AttachContext(entryID string, contextID string) error {
+	return nil
+}
+
+func (m *mockStorage) DetachContext(entryID string, contextID string) error {
+	return nil
+}
+
 func makeTestDays() (*mockStorage, []storage.DaySummary) {
 	jan10 := time.Date(2026, 1, 10, 0, 0, 0, 0, time.Local)
 	jan12 := time.Date(2026, 1, 12, 0, 0, 0, 0, time.Local)
