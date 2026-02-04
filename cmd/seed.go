@@ -97,8 +97,9 @@ var profiles = map[string]profile{
 }
 
 var seedCmd = &cobra.Command{
-	Use:   "seed [profile]",
-	Short: "Seed the diary with realistic sample data",
+	Use:    "seed [profile]",
+	Short:  "Seed the diary with realistic sample data",
+	Hidden: true,
 	Long: `Populate the diary with realistic entries to simulate an active user.
 
 Available profiles:
