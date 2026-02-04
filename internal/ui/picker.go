@@ -21,11 +21,23 @@ const (
 	screenEntryDetail
 )
 
-// StorageProvider abstracts storage operations for the picker.
+// StorageProvider abstracts storage operations for the TUI.
 type StorageProvider interface {
+	// Read
 	ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, error)
 	List(opts storage.ListOptions) ([]entry.Entry, error)
 	Get(id string) (entry.Entry, error)
+
+	// Write
+	Create(e entry.Entry) error
+	Update(id string, content string, templates []entry.TemplateRef) (entry.Entry, error)
+	Delete(id string) error
+
+	// Context
+	ListContexts() ([]storage.Context, error)
+	CreateContext(c storage.Context) error
+	AttachContext(entryID string, contextID string) error
+	DetachContext(entryID string, contextID string) error
 }
 
 // dateItem implements list.Item for DaySummary.
