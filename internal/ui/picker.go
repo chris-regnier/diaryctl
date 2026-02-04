@@ -308,6 +308,37 @@ func (m pickerModel) View() string {
 	return ""
 }
 
+// TUIConfig holds configuration needed by the TUI.
+type TUIConfig struct {
+	Editor          string // resolved editor command
+	DefaultTemplate string // default template name
+}
+
+// newTUIModel creates a new TUI model starting at the today screen.
+// This is a temporary stub that will be replaced in Task 3.
+func newTUIModel(store StorageProvider, cfg TUIConfig) pickerModel {
+	// Temporary stub: just create a picker model with empty days
+	// Task 3 will replace this with proper today screen initialization
+	m := newPickerModel(store, []storage.DaySummary{})
+	// The cfg will be used in Task 3 when we implement the full TUI model
+	_ = cfg
+	return m
+}
+
+// RunTUI launches the full interactive TUI starting at the today screen.
+func RunTUI(store StorageProvider, cfg TUIConfig) error {
+	m := newTUIModel(store, cfg)
+	p := tea.NewProgram(m, tea.WithAltScreen())
+	result, err := p.Run()
+	if err != nil {
+		return err
+	}
+	if pm, ok := result.(pickerModel); ok && pm.err != nil {
+		return pm.err
+	}
+	return nil
+}
+
 // RunPicker launches the interactive daily picker.
 func RunPicker(store StorageProvider, opts storage.ListDaysOptions) error {
 	days, err := store.ListDays(opts)
