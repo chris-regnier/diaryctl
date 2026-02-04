@@ -257,3 +257,157 @@ func TestPickerScreenTransitions(t *testing.T) {
 		t.Fatalf("expected DateList screen after esc, got %d", m.screen)
 	}
 }
+
+func TestTodayScreenDataLoading(t *testing.T) {
+	// Test loading today's data with multiple entries
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	// Create test entries for today (oldest to newest)
+	e1 := entry.Entry{ID: "daily001", Content: "# Today's daily entry", CreatedAt: today.Add(8 * time.Hour), UpdatedAt: today.Add(8 * time.Hour)}
+	e2 := entry.Entry{ID: "entry002", Content: "Morning note", CreatedAt: today.Add(10 * time.Hour), UpdatedAt: today.Add(10 * time.Hour)}
+	e3 := entry.Entry{ID: "entry003", Content: "Afternoon note", CreatedAt: today.Add(14 * time.Hour), UpdatedAt: today.Add(14 * time.Hour)}
+
+	mock := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {e3, e2, e1}, // newest-first order
+		},
+		byID: map[string]entry.Entry{
+			"daily001": e1, "entry002": e2, "entry003": e3,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(mock, cfg)
+
+	// Verify initial screen is today
+	if m.screen != screenToday {
+		t.Fatalf("expected screenToday, got %d", m.screen)
+	}
+
+	// Load today's data
+	msg := m.loadTodayCmd()
+	loadedMsg, ok := msg.(todayLoadedMsg)
+	if !ok {
+		t.Fatalf("expected todayLoadedMsg, got %T", msg)
+	}
+
+	if loadedMsg.err != nil {
+		t.Fatalf("unexpected error: %v", loadedMsg.err)
+	}
+
+	// Verify daily entry is the oldest (e1)
+	if loadedMsg.daily == nil {
+		t.Fatal("expected daily entry, got nil")
+	}
+	if loadedMsg.daily.ID != "daily001" {
+		t.Errorf("expected daily entry ID daily001, got %s", loadedMsg.daily.ID)
+	}
+
+	// Verify other entries are the rest (e2, e3) in newest-first order
+	if len(loadedMsg.entries) != 2 {
+		t.Fatalf("expected 2 other entries, got %d", len(loadedMsg.entries))
+	}
+	if loadedMsg.entries[0].ID != "entry003" {
+		t.Errorf("expected first entry ID entry003, got %s", loadedMsg.entries[0].ID)
+	}
+	if loadedMsg.entries[1].ID != "entry002" {
+		t.Errorf("expected second entry ID entry002, got %s", loadedMsg.entries[1].ID)
+	}
+
+	// Apply the message to the model
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+	updated, _ := m.Update(loadedMsg)
+	m = updated.(pickerModel)
+
+	// Verify model state
+	if m.dailyEntry == nil {
+		t.Fatal("expected dailyEntry to be set")
+	}
+	if m.dailyEntry.ID != "daily001" {
+		t.Errorf("expected dailyEntry ID daily001, got %s", m.dailyEntry.ID)
+	}
+	if len(m.todayEntries) != 2 {
+		t.Errorf("expected 2 todayEntries, got %d", len(m.todayEntries))
+	}
+}
+
+func TestTodayScreenEmptyDay(t *testing.T) {
+	// Test loading today when there are no entries
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	mock := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {}, // no entries
+		},
+		byID: map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(mock, cfg)
+
+	// Load today's data
+	msg := m.loadTodayCmd()
+	loadedMsg, ok := msg.(todayLoadedMsg)
+	if !ok {
+		t.Fatalf("expected todayLoadedMsg, got %T", msg)
+	}
+
+	if loadedMsg.err != nil {
+		t.Fatalf("unexpected error: %v", loadedMsg.err)
+	}
+
+	// Verify empty state
+	if loadedMsg.daily != nil {
+		t.Errorf("expected nil daily entry, got %v", loadedMsg.daily)
+	}
+	if len(loadedMsg.entries) != 0 {
+		t.Errorf("expected 0 other entries, got %d", len(loadedMsg.entries))
+	}
+}
+
+func TestTodayScreenOnlyDailyEntry(t *testing.T) {
+	// Test loading today when there's only one entry (the daily entry)
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	e1 := entry.Entry{ID: "daily001", Content: "# Today's daily entry", CreatedAt: today.Add(8 * time.Hour), UpdatedAt: today.Add(8 * time.Hour)}
+
+	mock := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {e1},
+		},
+		byID: map[string]entry.Entry{
+			"daily001": e1,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(mock, cfg)
+
+	// Load today's data
+	msg := m.loadTodayCmd()
+	loadedMsg, ok := msg.(todayLoadedMsg)
+	if !ok {
+		t.Fatalf("expected todayLoadedMsg, got %T", msg)
+	}
+
+	if loadedMsg.err != nil {
+		t.Fatalf("unexpected error: %v", loadedMsg.err)
+	}
+
+	// Verify daily entry is set
+	if loadedMsg.daily == nil {
+		t.Fatal("expected daily entry, got nil")
+	}
+	if loadedMsg.daily.ID != "daily001" {
+		t.Errorf("expected daily entry ID daily001, got %s", loadedMsg.daily.ID)
+	}
+
+	// Verify no other entries
+	if len(loadedMsg.entries) != 0 {
+		t.Errorf("expected 0 other entries, got %d", len(loadedMsg.entries))
+	}
+}

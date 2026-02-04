@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -16,7 +17,8 @@ import (
 type pickerScreen int
 
 const (
-	screenDateList pickerScreen = iota
+	screenToday pickerScreen = iota
+	screenDateList
 	screenDayDetail
 	screenEntryDetail
 )
@@ -71,17 +73,26 @@ func (e entryItem) FilterValue() string { return e.entry.ID }
 // pickerModel is the main Bubble Tea model for the daily picker.
 type pickerModel struct {
 	store    StorageProvider
+	cfg      TUIConfig
 	screen   pickerScreen
+	// Today screen
+	dailyEntry    *entry.Entry   // today's daily entry (nil if none)
+	todayEntries  []entry.Entry  // other entries today (excluding daily)
+	todayList     list.Model     // list for other today entries
+	dailyViewport viewport.Model // viewport for daily entry content
+	todayFocus    int            // 0=daily viewport, 1=entry list
+	// Browse screens (existing)
 	days     []storage.DaySummary
 	dayIdx   int
 	dateList list.Model
 	dayList  list.Model
 	viewport viewport.Model
 	entry    entry.Entry
-	width    int
-	height   int
-	ready    bool
-	err      error
+	// Common
+	width  int
+	height int
+	ready  bool
+	err    error
 }
 
 func newPickerModel(store StorageProvider, days []storage.DaySummary) pickerModel {
@@ -104,11 +115,39 @@ func newPickerModel(store StorageProvider, days []storage.DaySummary) pickerMode
 }
 
 func (m pickerModel) Init() tea.Cmd {
+	if m.screen == screenToday {
+		return m.loadTodayCmd
+	}
 	return nil
 }
 
 func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case todayLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit
+		}
+		m.dailyEntry = msg.daily
+		m.todayEntries = msg.entries
+		// Build today list
+		items := make([]list.Item, len(msg.entries))
+		for i, e := range msg.entries {
+			items[i] = entryItem{entry: e}
+		}
+		m.todayList = list.New(items, list.NewDefaultDelegate(), 0, 0)
+		m.todayList.Title = ""
+		m.todayList.SetShowHelp(false)
+		// Build daily viewport
+		if msg.daily != nil {
+			m.dailyViewport = viewport.New(m.width, m.dailyViewportHeight())
+			m.dailyViewport.SetContent(msg.daily.Content)
+		}
+		if m.ready {
+			m.layoutToday()
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -285,6 +324,43 @@ func (m pickerModel) formatEntry() string {
 	return b.String()
 }
 
+// dailyViewportHeight returns the height for the daily entry viewport.
+// This is a stub that will be replaced in Task 4.
+func (m pickerModel) dailyViewportHeight() int {
+	return 20
+}
+
+// layoutToday updates the sizes of today screen components.
+// This is a stub that will be replaced in Task 4.
+func (m pickerModel) layoutToday() {
+	// Task 4 will implement proper layout
+}
+
+type todayLoadedMsg struct {
+	daily   *entry.Entry
+	entries []entry.Entry
+	err     error
+}
+
+func (m pickerModel) loadTodayCmd() tea.Msg {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	entries, err := m.store.List(storage.ListOptions{Date: &today})
+	if err != nil {
+		return todayLoadedMsg{err: err}
+	}
+	if len(entries) == 0 {
+		return todayLoadedMsg{}
+	}
+	// First entry is the daily entry (oldest, shown inline)
+	daily := entries[len(entries)-1] // oldest (list is newest-first)
+	var others []entry.Entry
+	if len(entries) > 1 {
+		others = entries[:len(entries)-1]
+	}
+	return todayLoadedMsg{daily: &daily, entries: others}
+}
+
 func (m pickerModel) View() string {
 	if !m.ready {
 		return "Loading..."
@@ -315,13 +391,12 @@ type TUIConfig struct {
 }
 
 // newTUIModel creates a new TUI model starting at the today screen.
-// This is a temporary stub that will be replaced in Task 3.
 func newTUIModel(store StorageProvider, cfg TUIConfig) pickerModel {
-	// Temporary stub: just create a picker model with empty days
-	// Task 3 will replace this with proper today screen initialization
-	m := newPickerModel(store, []storage.DaySummary{})
-	// The cfg will be used in Task 3 when we implement the full TUI model
-	_ = cfg
+	m := pickerModel{
+		store:  store,
+		cfg:    cfg,
+		screen: screenToday,
+	}
 	return m
 }
 
