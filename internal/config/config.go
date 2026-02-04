@@ -23,10 +23,6 @@ type Config struct {
 	DataDir          string      `mapstructure:"data_dir"`
 	Editor           string      `mapstructure:"editor"`
 	DefaultTemplate  string      `mapstructure:"default_template"`
-	Storage          string      `mapstructure:"storage"`
-	DataDir          string      `mapstructure:"data_dir"`
-	Editor           string      `mapstructure:"editor"`
-	DefaultTemplate  string      `mapstructure:"default_template"`
 	ContextProviders []string    `mapstructure:"context_providers"`
 	ContextResolvers []string    `mapstructure:"context_resolvers"`
 	Shell            ShellConfig `mapstructure:"shell"`
