@@ -157,6 +157,8 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		footerHeight := 2 // help hint + spacing
 
 		switch m.screen {
+		case screenToday:
+			m.layoutToday()
 		case screenDateList:
 			m.dateList.SetSize(msg.Width, msg.Height-footerHeight)
 		case screenDayDetail:
@@ -324,16 +326,29 @@ func (m pickerModel) formatEntry() string {
 	return b.String()
 }
 
-// dailyViewportHeight returns the height for the daily entry viewport.
-// This is a stub that will be replaced in Task 4.
 func (m pickerModel) dailyViewportHeight() int {
-	return 20
+	maxHeight := m.height * 6 / 10 // 60% of terminal
+	return maxHeight
 }
 
-// layoutToday updates the sizes of today screen components.
-// This is a stub that will be replaced in Task 4.
-func (m pickerModel) layoutToday() {
-	// Task 4 will implement proper layout
+func (m *pickerModel) layoutToday() {
+	headerHeight := 2  // header + blank line
+	footerHeight := 2  // help + blank line
+
+	if m.dailyEntry != nil {
+		vpHeight := m.dailyViewportHeight()
+		m.dailyViewport.Width = m.width
+		m.dailyViewport.Height = vpHeight
+		m.dailyViewport.SetContent(m.dailyEntry.Content)
+
+		listHeight := m.height - headerHeight - vpHeight - footerHeight - 1 // 1 for separator
+		if listHeight < 3 {
+			listHeight = 3
+		}
+		m.todayList.SetSize(m.width, listHeight)
+	} else {
+		m.todayList.SetSize(m.width, m.height-headerHeight-footerHeight)
+	}
 }
 
 type todayLoadedMsg struct {
@@ -367,6 +382,46 @@ func (m pickerModel) View() string {
 	}
 
 	switch m.screen {
+	case screenToday:
+		if m.dailyEntry == nil && len(m.todayEntries) == 0 {
+			// Empty state
+			header := lipgloss.NewStyle().Bold(true).Render(
+				fmt.Sprintf("Today — %s", time.Now().Format("2006-01-02")))
+			empty := "\nNothing yet today.\n\n  j  jot a quick note\n  c  create a new entry\n"
+			footer := helpStyle.Render("j jot  c create  b browse  x ctx  ? help")
+			return header + empty + "\n" + footer
+		}
+
+		var sections []string
+
+		// Header
+		count := len(m.todayEntries)
+		if m.dailyEntry != nil {
+			count++
+		}
+		label := "entries"
+		if count == 1 {
+			label = "entry"
+		}
+		header := lipgloss.NewStyle().Bold(true).Render(
+			fmt.Sprintf("Today — %s    %d %s", time.Now().Format("2006-01-02"), count, label))
+		sections = append(sections, header)
+
+		// Daily entry viewport
+		if m.dailyEntry != nil {
+			sections = append(sections, m.dailyViewport.View())
+		}
+
+		// Other entries list
+		if len(m.todayEntries) > 0 {
+			sections = append(sections, m.todayList.View())
+		}
+
+		// Footer
+		footer := helpStyle.Render("j jot  c create  e edit  b browse  x ctx  ? help")
+		sections = append(sections, footer)
+
+		return strings.Join(sections, "\n")
 	case screenDateList:
 		footer := helpStyle.Render("↑/↓ navigate • enter select • q quit")
 		return m.dateList.View() + "\n" + footer
