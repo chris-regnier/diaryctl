@@ -172,6 +172,8 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch m.screen {
+		case screenToday:
+			return m.updateToday(msg)
 		case screenDateList:
 			return m.updateDateList(msg)
 		case screenDayDetail:
@@ -194,10 +196,49 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m pickerModel) updateToday(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "b":
+		// Switch to browse (date list)
+		return m.loadDateList()
+	case "tab":
+		// Toggle focus between daily viewport and entry list
+		if m.dailyEntry != nil && len(m.todayEntries) > 0 {
+			m.todayFocus = (m.todayFocus + 1) % 2
+		}
+		return m, nil
+	case "enter":
+		if m.todayFocus == 0 && m.dailyEntry != nil {
+			// Edit daily entry in $EDITOR — handled in Task 7
+			return m, nil
+		}
+		if m.todayFocus == 1 {
+			if item, ok := m.todayList.SelectedItem().(entryItem); ok {
+				return m.loadEntryDetail(item.entry.ID)
+			}
+		}
+		return m, nil
+	}
+
+	// Pass to focused component
+	var cmd tea.Cmd
+	if m.todayFocus == 0 && m.dailyEntry != nil {
+		m.dailyViewport, cmd = m.dailyViewport.Update(msg)
+	} else if len(m.todayEntries) > 0 {
+		m.todayList, cmd = m.todayList.Update(msg)
+	}
+	return m, cmd
+}
+
 func (m pickerModel) updateDateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
+	case "esc", "backspace":
+		m.screen = screenToday
+		return m, m.loadTodayCmd
 	case "enter":
 		if item, ok := m.dateList.SelectedItem().(dateItem); ok {
 			// Find index of this day
@@ -379,6 +420,27 @@ func (m pickerModel) loadTodayCmd() tea.Msg {
 		others = entries[:len(entries)-1]
 	}
 	return todayLoadedMsg{daily: &daily, entries: others}
+}
+
+func (m pickerModel) loadDateList() (tea.Model, tea.Cmd) {
+	days, err := m.store.ListDays(storage.ListDaysOptions{})
+	if err != nil {
+		m.err = err
+		return m, tea.Quit
+	}
+	m.days = days
+	items := make([]list.Item, len(days))
+	for i, d := range days {
+		items[i] = dateItem{summary: d}
+	}
+	m.dateList = list.New(items, list.NewDefaultDelegate(), 0, 0)
+	m.dateList.Title = "Daily View"
+	m.dateList.SetShowHelp(false)
+	if m.ready {
+		m.dateList.SetSize(m.width, m.height-2)
+	}
+	m.screen = screenDateList
+	return m, nil
 }
 
 func (m pickerModel) View() string {
