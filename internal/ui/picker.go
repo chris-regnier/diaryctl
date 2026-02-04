@@ -332,6 +332,11 @@ func (m pickerModel) dailyViewportHeight() int {
 }
 
 func (m *pickerModel) layoutToday() {
+	// Guard: only layout if we have loaded today's data
+	if m.todayList.Items() == nil {
+		return
+	}
+
 	headerHeight := 2  // header + blank line
 	footerHeight := 2  // help + blank line
 
