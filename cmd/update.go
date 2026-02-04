@@ -19,7 +19,8 @@ var updateCmd = &cobra.Command{
 	Long:  "Replace the content of an existing diary entry with new text.",
 	Example: `  diaryctl update a3kf9x2m "Updated content here"
   echo "new content" | diaryctl update a3kf9x2m -`,
-	Args: cobra.MinimumNArgs(2),
+	Args:     cobra.MinimumNArgs(2),
+	PostRunE: invalidateCachePostRun,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
 		var content string
