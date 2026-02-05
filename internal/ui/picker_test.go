@@ -411,3 +411,53 @@ func TestTodayScreenOnlyDailyEntry(t *testing.T) {
 		t.Errorf("expected 0 other entries, got %d", len(loadedMsg.entries))
 	}
 }
+
+func TestContextPanelEscReturnsToCorrectScreen(t *testing.T) {
+	tests := []struct {
+		name       string
+		fromScreen pickerScreen
+	}{
+		{"from today screen", screenToday},
+		{"from date list", screenDateList},
+		{"from day detail", screenDayDetail},
+		{"from entry detail", screenEntryDetail},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			now := time.Now()
+			today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+			store := &mockStorage{
+				entries: map[string][]entry.Entry{
+					today.Format("2006-01-02"): {},
+				},
+				byID: map[string]entry.Entry{},
+			}
+			cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+			m := newTUIModel(store, cfg)
+			m.screen = screenContextPanel
+			m.prevScreen = tt.fromScreen
+
+			// Simulate ESC key
+			msg := tea.KeyMsg{Type: tea.KeyEsc}
+			updatedModel, cmd := m.Update(msg)
+			m = updatedModel.(pickerModel)
+
+			if m.screen != tt.fromScreen {
+				t.Errorf("ESC from context panel should return to %v, got %v", tt.fromScreen, m.screen)
+			}
+
+			// For non-today screens, loadTodayCmd should NOT be returned
+			// This verifies the bug: currently it always returns loadTodayCmd
+			if tt.fromScreen != screenToday && cmd != nil {
+				// Execute the command to see what it does
+				result := cmd()
+				// If it's a todayLoadedMsg, that's the bug - we're loading today when we shouldn't
+				if _, ok := result.(todayLoadedMsg); ok {
+					t.Errorf("ESC from context panel to %v should not load today screen, but it did", tt.fromScreen)
+				}
+			}
+		})
+	}
+}

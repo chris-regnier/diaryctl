@@ -856,7 +856,18 @@ func (m pickerModel) updateContextPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "esc":
 		m.screen = m.prevScreen
-		return m, m.loadTodayCmd
+		switch m.prevScreen {
+		case screenToday:
+			return m, m.loadTodayCmd
+		case screenDateList:
+			return m, nil // already loaded
+		case screenDayDetail:
+			return m, nil // already loaded
+		case screenEntryDetail:
+			return m, nil // already loaded
+		default:
+			return m, nil
+		}
 	case "enter":
 		if m.contextEntryID != "" {
 			// Toggle context attachment
