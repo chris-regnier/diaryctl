@@ -30,15 +30,11 @@ go build -o diaryctl
 
 ## Quick Start
 
-### Initialize Configuration
+### First-Time Setup
 
-```bash
-# Create default config (uses markdown storage in ~/.diaryctl)
-diaryctl init
+diaryctl automatically creates necessary directories and configuration on first use. No initialization command is required.
 
-# Or specify SQLite backend
-diaryctl init --storage sqlite
-```
+Configuration is optional - defaults work out of the box with markdown storage in `~/.diaryctl/`.
 
 ### Basic Usage
 
@@ -110,17 +106,16 @@ diaryctl create --template standup
 
 ## Configuration
 
-Configuration file location: `~/.config/diaryctl/config.yaml`
+Configuration file locations (searched in order):
+- `$XDG_CONFIG_HOME/diaryctl/config.toml` (if XDG_CONFIG_HOME is set)
+- `~/.diaryctl/config.toml`
 
-```yaml
-storage: markdown  # or sqlite
-data_dir: ~/.diaryctl/data
-editor: hx  # or vim, nano, etc.
-context_providers:
-  - git
-  - datetime
-context_resolvers:
-  - git
+```toml
+storage = "markdown"  # or "sqlite"
+data_dir = "~/.diaryctl/data"
+editor = "hx"  # or vim, nano, etc.
+context_providers = ["git", "datetime"]
+context_resolvers = ["git"]
 ```
 
 ## Commands
