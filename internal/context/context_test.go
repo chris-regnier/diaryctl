@@ -13,7 +13,7 @@ type stubProvider struct {
 	err    error
 }
 
-func (s *stubProvider) Name() string             { return s.name }
+func (s *stubProvider) Name() string              { return s.name }
 func (s *stubProvider) Generate() (string, error) { return s.output, s.err }
 
 func TestComposeContent_empty(t *testing.T) {
@@ -83,7 +83,7 @@ type stubResolver struct {
 }
 
 func (s *stubResolver) Name() string               { return s.name }
-func (s *stubResolver) Resolve() ([]string, error)  { return s.names, s.err }
+func (s *stubResolver) Resolve() ([]string, error) { return s.names, s.err }
 
 type mockContextStore struct {
 	contexts map[string]storage.Context

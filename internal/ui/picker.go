@@ -94,9 +94,9 @@ func (c contextItem) FilterValue() string { return c.ctx.Name }
 
 // pickerModel is the main Bubble Tea model for the daily picker.
 type pickerModel struct {
-	store    StorageProvider
-	cfg      TUIConfig
-	screen   pickerScreen
+	store  StorageProvider
+	cfg    TUIConfig
+	screen pickerScreen
 	// Today screen
 	dailyEntry    *entry.Entry   // today's daily entry (nil if none)
 	todayEntries  []entry.Entry  // other entries today (excluding daily)
@@ -118,10 +118,10 @@ type pickerModel struct {
 	deleteEntry  entry.Entry
 	// Context panel
 	contextList     list.Model
-	contextEntryID  string              // entry being context-managed (empty = browse mode)
+	contextEntryID  string // entry being context-managed (empty = browse mode)
 	contextItems    []storage.Context
-	contextAttached map[string]bool     // contextID -> attached to current entry
-	prevScreen      pickerScreen        // screen to return to on esc
+	contextAttached map[string]bool // contextID -> attached to current entry
+	prevScreen      pickerScreen    // screen to return to on esc
 	contextInput    textinput.Model
 	contextCreating bool
 	// Help overlay
@@ -549,8 +549,8 @@ func (m *pickerModel) layoutToday() {
 		return
 	}
 
-	headerHeight := 2  // header + blank line
-	footerHeight := 2  // help + blank line
+	headerHeight := 2 // header + blank line
+	footerHeight := 2 // help + blank line
 
 	if m.dailyEntry != nil {
 		vpHeight := m.dailyViewportHeight()

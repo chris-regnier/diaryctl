@@ -9,8 +9,8 @@ import (
 )
 
 var initShellCmd = &cobra.Command{
-	Use:       "init <shell>",
-	Short:     "Output shell integration script",
+	Use:   "init <shell>",
+	Short: "Output shell integration script",
 	Long: `Output shell integration script for eval.
 
 Generates shell-specific initialization code that sets up:

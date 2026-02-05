@@ -11,12 +11,12 @@ const cacheFileName = ".prompt-cache"
 
 // PromptCache holds cached prompt status data.
 type PromptCache struct {
-	Today          bool      `json:"today"`
-	Streak         int       `json:"streak"`
-	TodayDate      string    `json:"today_date"`
-	DefaultTemplate string   `json:"default_template"`
-	StorageBackend string    `json:"storage_backend"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	Today           bool      `json:"today"`
+	Streak          int       `json:"streak"`
+	TodayDate       string    `json:"today_date"`
+	DefaultTemplate string    `json:"default_template"`
+	StorageBackend  string    `json:"storage_backend"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // CachePath returns the full path to the prompt cache file.

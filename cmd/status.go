@@ -15,7 +15,7 @@ import (
 type statusData struct {
 	TodayIcon  string
 	Streak     int
-	StreakIcon  string
+	StreakIcon string
 	Template   string
 	Backend    string
 	HasToday   bool
@@ -93,12 +93,12 @@ func buildStatusData(cache *shell.PromptCache) statusData {
 	}
 
 	return statusData{
-		TodayIcon: icon,
-		Streak:    cache.Streak,
+		TodayIcon:  icon,
+		Streak:     cache.Streak,
 		StreakIcon: appConfig.Shell.StreakIcon,
-		Template:  cache.DefaultTemplate,
-		Backend:   cache.StorageBackend,
-		HasToday:  cache.Today,
+		Template:   cache.DefaultTemplate,
+		Backend:    cache.StorageBackend,
+		HasToday:   cache.Today,
 	}
 }
 
