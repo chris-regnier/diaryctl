@@ -53,7 +53,9 @@ func (m *mockStorage) Create(e entry.Entry) error {
 	m.byID[e.ID] = e
 	// Add to date-based entries map
 	// Convert to local time for date key to match how entries are stored by date
-	dateKey := e.CreatedAt.In(time.Local).Truncate(24 * time.Hour).Format("2006-01-02")
+	localTime := e.CreatedAt.In(time.Local)
+	y, mo, d := localTime.Date()
+	dateKey := time.Date(y, mo, d, 0, 0, 0, 0, time.Local).Format("2006-01-02")
 	m.entries[dateKey] = append(m.entries[dateKey], e)
 	return nil
 }
