@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,16 +38,66 @@ func (m *mockStorage) Get(id string) (entry.Entry, error) {
 	return entry.Entry{}, storage.ErrNotFound
 }
 
-// Write methods (stubs for test - not used by current tests)
+// Write methods - now fully functional for testing
 func (m *mockStorage) Create(e entry.Entry) error {
+	// Add to byID map
+	m.byID[e.ID] = e
+	// Add to date-based entries map
+	// Convert to local time for date key to match how entries are stored by date
+	dateKey := e.CreatedAt.In(time.Local).Truncate(24 * time.Hour).Format("2006-01-02")
+	m.entries[dateKey] = append(m.entries[dateKey], e)
 	return nil
 }
 
 func (m *mockStorage) Update(id string, content string, templates []entry.TemplateRef) (entry.Entry, error) {
-	return entry.Entry{}, nil
+	e, ok := m.byID[id]
+	if !ok {
+		return entry.Entry{}, storage.ErrNotFound
+	}
+	e.Content = content
+	e.Templates = templates
+	e.UpdatedAt = time.Now().UTC()
+	m.byID[id] = e
+
+	// Update in date-based entries map
+	// Convert to local time for date key to match how entries are stored by date
+	dateKey := e.CreatedAt.In(time.Local).Truncate(24 * time.Hour).Format("2006-01-02")
+	for i, existing := range m.entries[dateKey] {
+		if existing.ID == id {
+			m.entries[dateKey][i] = e
+			break
+		}
+	}
+	return e, nil
 }
 
 func (m *mockStorage) Delete(id string) error {
+	_, ok := m.byID[id]
+	if !ok {
+		return storage.ErrNotFound
+	}
+
+	// Remove from byID map
+	delete(m.byID, id)
+
+	// Remove from date-based entries map
+	// For test purposes, we'll just iterate through all date keys to find and remove the entry
+	for dateKey, entries := range m.entries {
+		filtered := []entry.Entry{}
+		found := false
+		for _, existing := range entries {
+			if existing.ID == id {
+				found = true
+			} else {
+				filtered = append(filtered, existing)
+			}
+		}
+		if found {
+			m.entries[dateKey] = filtered
+			break
+		}
+	}
+
 	return nil
 }
 
@@ -533,4 +584,243 @@ func TestEditorTempFileCleanup(t *testing.T) {
 
 	testEntry := entry.Entry{ID: "test", Content: "test content", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	_, _ = m.startEdit(testEntry)
+}
+
+// Task 5: Add Tests for Interactive Actions
+
+func TestJotActionCreatesNewEntry(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {}, // empty today
+		},
+		byID: map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+
+	// Activate jot mode
+	m.jotActive = true
+	m.jotInput.SetValue("Meeting notes at 2pm")
+
+	// Simulate Enter key to submit
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := m.updateJotInput(msg)
+	m = updatedModel.(pickerModel)
+
+	// Execute the jot command
+	if cmd == nil {
+		t.Fatal("Expected jot command to be returned, got nil")
+	}
+
+	result := cmd()
+	if jotMsg, ok := result.(jotCompleteMsg); ok {
+		if jotMsg.err != nil {
+			t.Fatalf("Jot failed: %v", jotMsg.err)
+		}
+	} else {
+		t.Fatalf("Expected jotCompleteMsg, got %T", result)
+	}
+
+	// Verify entry was created
+	entries := store.entries[today.Format("2006-01-02")]
+	if len(entries) != 1 {
+		t.Fatalf("Expected 1 entry after jot, got %d", len(entries))
+	}
+
+	if !strings.Contains(entries[0].Content, "Meeting notes at 2pm") {
+		t.Errorf("Entry content doesn't contain jot text: %s", entries[0].Content)
+	}
+}
+
+func TestJotActionAppendsToExistingEntry(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	// Pre-populate with today's daily entry
+	existingEntry := entry.Entry{
+		ID:        "daily01",
+		Content:   "# Daily Entry\n\nInitial content",
+		CreatedAt: today.Add(8 * time.Hour),
+		UpdatedAt: today.Add(8 * time.Hour),
+	}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {existingEntry},
+		},
+		byID: map[string]entry.Entry{
+			"daily01": existingEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	m.jotActive = true
+	m.jotInput.SetValue("Additional note")
+
+	// Submit jot
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := m.updateJotInput(msg)
+	m = updatedModel.(pickerModel)
+
+	if cmd == nil {
+		t.Fatal("Expected jot command to be returned, got nil")
+	}
+
+	result := cmd()
+	if jotMsg, ok := result.(jotCompleteMsg); ok {
+		if jotMsg.err != nil {
+			t.Fatalf("Jot failed: %v", jotMsg.err)
+		}
+	} else {
+		t.Fatalf("Expected jotCompleteMsg, got %T", result)
+	}
+
+	// Should still have 1 entry (updated, not created)
+	entries := store.entries[today.Format("2006-01-02")]
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry after jot append, got %d", len(entries))
+	}
+
+	// Should contain both original and new content
+	content := store.byID["daily01"].Content
+	if !strings.Contains(content, "Initial content") {
+		t.Error("Original content lost during jot append")
+	}
+	if !strings.Contains(content, "Additional note") {
+		t.Error("Jot content not appended")
+	}
+}
+
+func TestDeleteActionConfirmation(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	testEntry := entry.Entry{ID: "entry01", Content: "Test entry", CreatedAt: today, UpdatedAt: today}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {testEntry},
+		},
+		byID: map[string]entry.Entry{
+			"entry01": testEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenEntryDetail
+	m.entry = testEntry
+	m.deleteEntry = testEntry
+
+	// Activate delete mode
+	m.deleteActive = true
+
+	// Simulate 'y' to confirm
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}}
+	updatedModel, cmd := m.updateDeleteConfirm(msg)
+	m = updatedModel.(pickerModel)
+
+	if cmd == nil {
+		t.Fatal("Expected delete command to be returned, got nil")
+	}
+
+	result := cmd()
+	if delMsg, ok := result.(deleteCompleteMsg); ok {
+		if delMsg.err != nil {
+			t.Fatalf("Delete failed: %v", delMsg.err)
+		}
+	} else {
+		t.Fatalf("Expected deleteCompleteMsg, got %T", result)
+	}
+
+	// Entry should be deleted
+	dateKey := today.Format("2006-01-02")
+	entries := store.entries[dateKey]
+	if len(entries) != 0 {
+		t.Errorf("Expected 0 entries after delete, got %d", len(entries))
+	}
+
+	// Should also be removed from byID
+	if _, exists := store.byID["entry01"]; exists {
+		t.Error("Entry still exists in byID map after delete")
+	}
+}
+
+func TestDeleteActionCancellation(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	testEntry := entry.Entry{ID: "entry01", Content: "Test entry", CreatedAt: today, UpdatedAt: today}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {testEntry},
+		},
+		byID: map[string]entry.Entry{
+			"entry01": testEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenEntryDetail
+	m.entry = testEntry
+	m.deleteEntry = testEntry
+	m.deleteActive = true
+
+	// Simulate 'n' to cancel
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
+	updatedModel, _ := m.updateDeleteConfirm(msg)
+	m = updatedModel.(pickerModel)
+
+	// Entry should NOT be deleted
+	entries := store.entries[today.Format("2006-01-02")]
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry after cancel, got %d", len(entries))
+	}
+
+	// Delete mode should be deactivated
+	if m.deleteActive {
+		t.Error("Delete mode should be deactivated after cancellation")
+	}
+}
+
+func TestHelpOverlayToggle(t *testing.T) {
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:    map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+
+	// Initially help should be inactive
+	if m.helpActive {
+		t.Error("Help should be inactive initially")
+	}
+
+	// Press '?' to show help
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+	updatedModel, _ := m.Update(msg)
+	m = updatedModel.(pickerModel)
+
+	if !m.helpActive {
+		t.Error("Help should be active after pressing '?'")
+	}
+
+	// Press '?' again to hide help
+	updatedModel, _ = m.Update(msg)
+	m = updatedModel.(pickerModel)
+
+	if m.helpActive {
+		t.Error("Help should be inactive after toggling off")
+	}
 }
