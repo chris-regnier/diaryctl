@@ -95,6 +95,9 @@ type pickerModel struct {
 	// Jot mode
 	jotInput  textinput.Model
 	jotActive bool
+	// Delete confirmation mode
+	deleteActive bool
+	deleteEntry  entry.Entry
 	// Common
 	width  int
 	height int
@@ -166,6 +169,27 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+	case deleteCompleteMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit
+		}
+		// Go back to parent screen and refresh
+		if m.screen == screenEntryDetail {
+			m.screen = screenDayDetail
+		}
+		// Refresh current screen
+		switch m.screen {
+		case screenToday:
+			return m, m.loadTodayCmd
+		case screenDateList:
+			return m.loadDateList()
+		case screenDayDetail:
+			return m.loadDayDetail()
+		default:
+			return m, nil
+		}
+
 	case todayLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -217,6 +241,11 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Jot input mode — intercept all keys
 		if m.jotActive {
 			return m.updateJotInput(msg)
+		}
+
+		// Delete confirmation mode — intercept all keys
+		if m.deleteActive {
+			return m.updateDeleteConfirm(msg)
 		}
 
 		// Global keys (work from any screen when not in input mode)
@@ -336,6 +365,12 @@ func (m pickerModel) updateDayDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if item, ok := m.dayList.SelectedItem().(entryItem); ok {
 			return m.startEdit(item.entry)
 		}
+	case "d":
+		if item, ok := m.dayList.SelectedItem().(entryItem); ok {
+			m.deleteActive = true
+			m.deleteEntry = item.entry
+			return m, nil
+		}
 	case "left", "p":
 		// Navigate to previous (earlier) day
 		if m.dayIdx < len(m.days)-1 {
@@ -369,6 +404,10 @@ func (m pickerModel) updateEntryDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "e":
 		return m.startEdit(m.entry)
+	case "d":
+		m.deleteActive = true
+		m.deleteEntry = m.entry
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -478,6 +517,10 @@ type editorFinishedMsg struct {
 	err error
 }
 
+type deleteCompleteMsg struct {
+	err error
+}
+
 func (m pickerModel) loadTodayCmd() tea.Msg {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
@@ -582,6 +625,12 @@ func (m pickerModel) View() string {
 	}
 
 	// At the end of View(), before returning:
+	if m.deleteActive {
+		prompt := fmt.Sprintf("Delete entry %s? [y/N] ", m.deleteEntry.ID)
+		warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // red
+		return result + "\n" + warningStyle.Render(prompt)
+	}
+
 	if m.jotActive {
 		return result + "\n" + m.jotInput.View()
 	}
@@ -620,6 +669,24 @@ func (m pickerModel) updateJotInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.jotInput, cmd = m.jotInput.Update(msg)
 	return m, cmd
+}
+
+func (m pickerModel) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch strings.ToLower(msg.String()) {
+	case "y":
+		m.deleteActive = false
+		id := m.deleteEntry.ID
+		return m, func() tea.Msg {
+			if err := m.store.Delete(id); err != nil {
+				return deleteCompleteMsg{err: err}
+			}
+			return deleteCompleteMsg{}
+		}
+	case "n", "esc":
+		m.deleteActive = false
+		return m, nil
+	}
+	return m, nil
 }
 
 func (m pickerModel) doJot(content string) tea.Msg {
