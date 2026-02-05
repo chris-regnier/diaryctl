@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/chris-regnier/diaryctl/internal/editor"
 	"github.com/chris-regnier/diaryctl/internal/entry"
 	"github.com/chris-regnier/diaryctl/internal/storage"
 )
@@ -146,6 +149,23 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+	case editorFinishedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit
+		}
+		// Refresh current screen
+		switch m.screen {
+		case screenToday:
+			return m, m.loadTodayCmd
+		case screenDateList:
+			return m.loadDateList()
+		case screenDayDetail:
+			return m.loadDayDetail()
+		default:
+			return m, nil
+		}
+
 	case todayLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -203,6 +223,8 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "j":
 			return m.startJot()
+		case "c":
+			return m.startCreate()
 		case "?":
 			// Help overlay — Task 10
 		case "x":
@@ -250,8 +272,8 @@ func (m pickerModel) updateToday(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		if m.todayFocus == 0 && m.dailyEntry != nil {
-			// Edit daily entry in $EDITOR — handled in Task 7
-			return m, nil
+			// Edit daily entry in $EDITOR
+			return m.startEdit(*m.dailyEntry)
 		}
 		if m.todayFocus == 1 {
 			if item, ok := m.todayList.SelectedItem().(entryItem); ok {
@@ -310,6 +332,10 @@ func (m pickerModel) updateDayDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if item, ok := m.dayList.SelectedItem().(entryItem); ok {
 			return m.loadEntryDetail(item.entry.ID)
 		}
+	case "e":
+		if item, ok := m.dayList.SelectedItem().(entryItem); ok {
+			return m.startEdit(item.entry)
+		}
 	case "left", "p":
 		// Navigate to previous (earlier) day
 		if m.dayIdx < len(m.days)-1 {
@@ -341,6 +367,8 @@ func (m pickerModel) updateEntryDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.dayList.SetSize(m.width, m.height-2)
 		}
 		return m, nil
+	case "e":
+		return m.startEdit(m.entry)
 	}
 
 	var cmd tea.Cmd
@@ -443,6 +471,10 @@ type todayLoadedMsg struct {
 }
 
 type jotCompleteMsg struct {
+	err error
+}
+
+type editorFinishedMsg struct {
 	err error
 }
 
@@ -643,6 +675,95 @@ func (m pickerModel) doJot(content string) tea.Msg {
 	}
 
 	return jotCompleteMsg{}
+}
+
+func (m pickerModel) startCreate() (tea.Model, tea.Cmd) {
+	editorCmd := editor.ResolveEditor(m.cfg.Editor)
+	parts := strings.Fields(editorCmd)
+	if len(parts) == 0 {
+		return m, nil
+	}
+
+	// Create temp file
+	tmpFile, err := os.CreateTemp("", "diaryctl-*.md")
+	if err != nil {
+		m.err = err
+		return m, tea.Quit
+	}
+	tmpName := tmpFile.Name()
+	tmpFile.Close()
+
+	cmdArgs := append(parts[1:], tmpName)
+	c := exec.Command(parts[0], cmdArgs...)
+	return m, tea.ExecProcess(c, func(err error) tea.Msg {
+		defer os.Remove(tmpName)
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		data, err := os.ReadFile(tmpName)
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		content := strings.TrimSpace(string(data))
+		if content == "" {
+			return editorFinishedMsg{} // no-op
+		}
+		id, err := entry.NewID()
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		now := time.Now().UTC()
+		e := entry.Entry{
+			ID:        id,
+			Content:   content,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if err := m.store.Create(e); err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		return editorFinishedMsg{}
+	})
+}
+
+func (m pickerModel) startEdit(e entry.Entry) (tea.Model, tea.Cmd) {
+	editorCmd := editor.ResolveEditor(m.cfg.Editor)
+	parts := strings.Fields(editorCmd)
+	if len(parts) == 0 {
+		return m, nil
+	}
+
+	tmpFile, err := os.CreateTemp("", "diaryctl-*.md")
+	if err != nil {
+		m.err = err
+		return m, tea.Quit
+	}
+	tmpName := tmpFile.Name()
+	tmpFile.WriteString(e.Content)
+	tmpFile.Close()
+
+	cmdArgs := append(parts[1:], tmpName)
+	c := exec.Command(parts[0], cmdArgs...)
+	entryID := e.ID
+	originalContent := e.Content
+	return m, tea.ExecProcess(c, func(err error) tea.Msg {
+		defer os.Remove(tmpName)
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		data, err := os.ReadFile(tmpName)
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		content := strings.TrimSpace(string(data))
+		if content == "" || content == strings.TrimSpace(originalContent) {
+			return editorFinishedMsg{} // no change
+		}
+		if _, err := m.store.Update(entryID, content, nil); err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		return editorFinishedMsg{}
+	})
 }
 
 // TUIConfig holds configuration needed by the TUI.
