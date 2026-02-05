@@ -1033,7 +1033,11 @@ func (m pickerModel) startCreate() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	tmpName := tmpFile.Name()
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpName)
+		m.err = fmt.Errorf("failed to prepare temp file: %w", err)
+		return m, tea.Quit
+	}
 
 	cmdArgs := append(parts[1:], tmpName)
 	c := exec.Command(parts[0], cmdArgs...)
@@ -1081,8 +1085,20 @@ func (m pickerModel) startEdit(e entry.Entry) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	tmpName := tmpFile.Name()
-	tmpFile.WriteString(e.Content)
-	tmpFile.Close()
+
+	// Write current content
+	if _, err := tmpFile.WriteString(e.Content); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpName)
+		m.err = fmt.Errorf("failed to write to temp file: %w", err)
+		return m, tea.Quit
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpName)
+		m.err = fmt.Errorf("failed to prepare temp file: %w", err)
+		return m, tea.Quit
+	}
 
 	cmdArgs := append(parts[1:], tmpName)
 	c := exec.Command(parts[0], cmdArgs...)
