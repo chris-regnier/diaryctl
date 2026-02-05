@@ -25,6 +25,7 @@ const (
 	screenDateList
 	screenDayDetail
 	screenEntryDetail
+	screenContextPanel
 )
 
 // StorageProvider abstracts storage operations for the TUI.
@@ -74,6 +75,23 @@ func (e entryItem) Title() string {
 func (e entryItem) Description() string { return e.entry.Preview(80) }
 func (e entryItem) FilterValue() string { return e.entry.ID }
 
+// contextItem implements list.Item for storage.Context.
+type contextItem struct {
+	ctx      storage.Context
+	attached bool
+}
+
+func (c contextItem) Title() string {
+	marker := "○"
+	if c.attached {
+		marker = "●"
+	}
+	return fmt.Sprintf("%s %s", marker, c.ctx.Name)
+}
+
+func (c contextItem) Description() string { return c.ctx.Source }
+func (c contextItem) FilterValue() string { return c.ctx.Name }
+
 // pickerModel is the main Bubble Tea model for the daily picker.
 type pickerModel struct {
 	store    StorageProvider
@@ -98,6 +116,14 @@ type pickerModel struct {
 	// Delete confirmation mode
 	deleteActive bool
 	deleteEntry  entry.Entry
+	// Context panel
+	contextList     list.Model
+	contextEntryID  string              // entry being context-managed (empty = browse mode)
+	contextItems    []storage.Context
+	contextAttached map[string]bool     // contextID -> attached to current entry
+	prevScreen      pickerScreen        // screen to return to on esc
+	contextInput    textinput.Model
+	contextCreating bool
 	// Common
 	width  int
 	height int
@@ -190,6 +216,29 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+	case contextsLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit
+		}
+		m.contextItems = msg.contexts
+		m.contextAttached = msg.attached
+
+		items := make([]list.Item, len(msg.contexts))
+		for i, c := range msg.contexts {
+			items[i] = contextItem{ctx: c, attached: msg.attached[c.ID]}
+		}
+
+		title := "Contexts"
+		if m.contextEntryID != "" {
+			title = fmt.Sprintf("Contexts for %s", m.contextEntryID)
+		}
+		m.contextList = list.New(items, list.NewDefaultDelegate(), m.width-4, m.height-6)
+		m.contextList.Title = title
+		m.contextList.SetShowHelp(false)
+		m.screen = screenContextPanel
+		return m, nil
+
 	case todayLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -257,7 +306,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			// Help overlay — Task 10
 		case "x":
-			// Context panel — Task 9
+			return m.openContextPanel()
 		}
 
 		// Screen-specific handling
@@ -270,6 +319,8 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateDayDetail(msg)
 		case screenEntryDetail:
 			return m.updateEntryDetail(msg)
+		case screenContextPanel:
+			return m.updateContextPanel(msg)
 		}
 	}
 
@@ -521,6 +572,12 @@ type deleteCompleteMsg struct {
 	err error
 }
 
+type contextsLoadedMsg struct {
+	contexts []storage.Context
+	attached map[string]bool
+	err      error
+}
+
 func (m pickerModel) loadTodayCmd() tea.Msg {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
@@ -622,6 +679,19 @@ func (m pickerModel) View() string {
 			m.entry.UpdatedAt.Local().Format("2006-01-02 15:04")))
 		footer := helpStyle.Render("↑/↓ scroll • esc back • q quit")
 		result = header + "\n" + meta + "\n\n" + m.viewport.View() + "\n" + footer
+	case screenContextPanel:
+		var b strings.Builder
+		b.WriteString(m.contextList.View())
+		if m.contextCreating {
+			b.WriteString("\n" + m.contextInput.View())
+		} else {
+			hint := "enter toggle  n new  / filter  esc close"
+			if m.contextEntryID == "" {
+				hint = "n new  / filter  esc close"
+			}
+			b.WriteString("\n" + helpStyle.Render(hint))
+		}
+		result = b.String()
 	}
 
 	// At the end of View(), before returning:
@@ -687,6 +757,139 @@ func (m pickerModel) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m pickerModel) openContextPanel() (tea.Model, tea.Cmd) {
+	m.prevScreen = m.screen
+
+	// Determine if we have a selected entry
+	switch m.screen {
+	case screenToday:
+		if m.todayFocus == 0 && m.dailyEntry != nil {
+			m.contextEntryID = m.dailyEntry.ID
+		} else if m.todayFocus == 1 {
+			if item, ok := m.todayList.SelectedItem().(entryItem); ok {
+				m.contextEntryID = item.entry.ID
+			}
+		}
+	case screenDayDetail:
+		if item, ok := m.dayList.SelectedItem().(entryItem); ok {
+			m.contextEntryID = item.entry.ID
+		}
+	case screenEntryDetail:
+		m.contextEntryID = m.entry.ID
+	default:
+		m.contextEntryID = ""
+	}
+
+	return m, func() tea.Msg { return m.loadContexts() }
+}
+
+func (m pickerModel) loadContexts() tea.Msg {
+	contexts, err := m.store.ListContexts()
+	if err != nil {
+		return contextsLoadedMsg{err: err}
+	}
+
+	attached := make(map[string]bool)
+	if m.contextEntryID != "" {
+		e, err := m.store.Get(m.contextEntryID)
+		if err == nil {
+			for _, ref := range e.Contexts {
+				attached[ref.ContextID] = true
+			}
+		}
+	}
+
+	return contextsLoadedMsg{contexts: contexts, attached: attached}
+}
+
+func (m pickerModel) updateContextPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.contextCreating {
+		return m.updateContextCreate(msg)
+	}
+
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.screen = m.prevScreen
+		return m, m.loadTodayCmd
+	case "enter":
+		if m.contextEntryID != "" {
+			// Toggle context attachment
+			if item, ok := m.contextList.SelectedItem().(contextItem); ok {
+				return m, func() tea.Msg {
+					if item.attached {
+						err := m.store.DetachContext(m.contextEntryID, item.ctx.ID)
+						if err != nil {
+							return contextsLoadedMsg{err: err}
+						}
+					} else {
+						err := m.store.AttachContext(m.contextEntryID, item.ctx.ID)
+						if err != nil {
+							return contextsLoadedMsg{err: err}
+						}
+					}
+					return m.loadContexts()
+				}
+			}
+		}
+	case "n":
+		// Create new context
+		ti := textinput.New()
+		ti.Placeholder = "context name..."
+		ti.Focus()
+		ti.CharLimit = 100
+		ti.Width = m.width - 8
+		m.contextInput = ti
+		m.contextCreating = true
+		return m, textinput.Blink
+	}
+
+	var cmd tea.Cmd
+	m.contextList, cmd = m.contextList.Update(msg)
+	return m, cmd
+}
+
+func (m pickerModel) updateContextCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		name := strings.TrimSpace(m.contextInput.Value())
+		m.contextCreating = false
+		if name == "" {
+			return m, nil
+		}
+		return m, func() tea.Msg {
+			id, err := entry.NewID()
+			if err != nil {
+				return contextsLoadedMsg{err: err}
+			}
+			now := time.Now().UTC()
+			c := storage.Context{
+				ID:        id,
+				Name:      name,
+				Source:    "manual",
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := m.store.CreateContext(c); err != nil {
+				return contextsLoadedMsg{err: err}
+			}
+			// Auto-attach if we have an entry selected
+			if m.contextEntryID != "" {
+				m.store.AttachContext(m.contextEntryID, id)
+			}
+			return m.loadContexts()
+		}
+	case "esc":
+		m.contextCreating = false
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.contextInput, cmd = m.contextInput.Update(msg)
+	return m, cmd
 }
 
 func (m pickerModel) doJot(content string) tea.Msg {
