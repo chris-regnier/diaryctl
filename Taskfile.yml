@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+vars:
+  GREETING: Hello, world!
+
+tasks:
+  default:
+    desc: Print a greeting message
+    cmds:
+      - echo "{{.GREETING}}"
+    silent: true
+
+  test:
+    desc: Run unit tests for Go application
+    cmds:
+      - go test ./... -v
+    silent: false
+
+  build:
+    desc: Compile Go application into executable
+    cmds:
+      - go build -o diaryctl
+    silent: false
+
+  clean:
+    desc: Cleans up the compiled executable
+    cmds:
+      - rm -f diaryctl
+      
+  run:
+    desc: Run compiled Go application
+    cmds:
+      - ./diaryctl
+    silent: false
+
+  # Additional tasks for development
+  lint:
+    desc: Run Go linting
+    cmds:
+      - go vet ./...
+      - staticcheck ./...
+    silent: false
+
+  docs:
+    desc: Generate documentation
+    cmds:
+      - go doc ./...
+    silent: false
