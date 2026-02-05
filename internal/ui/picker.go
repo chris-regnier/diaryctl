@@ -124,6 +124,8 @@ type pickerModel struct {
 	prevScreen      pickerScreen        // screen to return to on esc
 	contextInput    textinput.Model
 	contextCreating bool
+	// Help overlay
+	helpActive bool
 	// Common
 	width  int
 	height int
@@ -287,6 +289,17 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Help overlay — intercept all keys when active
+		if m.helpActive {
+			switch msg.String() {
+			case "?", "esc":
+				m.helpActive = false
+				return m, nil
+			}
+			// Swallow all other keys while help is shown
+			return m, nil
+		}
+
 		// Jot input mode — intercept all keys
 		if m.jotActive {
 			return m.updateJotInput(msg)
@@ -304,7 +317,8 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "c":
 			return m.startCreate()
 		case "?":
-			// Help overlay — Task 10
+			m.helpActive = true
+			return m, nil
 		case "x":
 			return m.openContextPanel()
 		}
@@ -622,6 +636,9 @@ func (m pickerModel) View() string {
 	if !m.ready {
 		return "Loading..."
 	}
+	if m.helpActive {
+		return m.helpOverlay()
+	}
 
 	var result string
 
@@ -706,6 +723,31 @@ func (m pickerModel) View() string {
 	}
 
 	return result
+}
+
+func (m pickerModel) helpOverlay() string {
+	help := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Padding(1, 2).
+		Width(48).
+		Render(`Navigation
+  ↑/↓        navigate / scroll
+  enter      select / edit daily entry
+  esc        go back
+  b          browse date list
+  ←/→ p/n    prev / next day
+  tab        switch focus (today)
+
+Actions
+  j          jot a quick note
+  c          create new entry
+  e          edit selected entry
+  d          delete selected entry
+  /          search / filter
+  x          context panel
+
+  q          quit     ? close help`)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, help)
 }
 
 func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
