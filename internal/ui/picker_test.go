@@ -13,10 +13,12 @@ import (
 
 // mockStorage implements StorageProvider for testing.
 type mockStorage struct {
-	days        []storage.DaySummary
-	entries     map[string][]entry.Entry
-	byID        map[string]entry.Entry
-	attachError error // Add this field
+	days          []storage.DaySummary
+	entries       map[string][]entry.Entry
+	byID          map[string]entry.Entry
+	attachError   error // Add this field
+	contexts      []storage.Context
+	entryContexts map[string][]string // entryID -> contextIDs
 }
 
 func (m *mockStorage) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, error) {
@@ -33,6 +35,13 @@ func (m *mockStorage) List(opts storage.ListOptions) ([]entry.Entry, error) {
 
 func (m *mockStorage) Get(id string) (entry.Entry, error) {
 	if e, ok := m.byID[id]; ok {
+		// Add context references if any
+		if contexts := m.entryContexts[id]; len(contexts) > 0 {
+			e.Contexts = make([]entry.ContextRef, len(contexts))
+			for i, ctxID := range contexts {
+				e.Contexts[i] = entry.ContextRef{ContextID: ctxID}
+			}
+		}
 		return e, nil
 	}
 	return entry.Entry{}, storage.ErrNotFound
@@ -101,12 +110,13 @@ func (m *mockStorage) Delete(id string) error {
 	return nil
 }
 
-// Context methods (stubs for test - not used by current tests)
+// Context methods
 func (m *mockStorage) ListContexts() ([]storage.Context, error) {
-	return nil, nil
+	return m.contexts, nil
 }
 
 func (m *mockStorage) CreateContext(c storage.Context) error {
+	m.contexts = append(m.contexts, c)
 	return nil
 }
 
@@ -114,11 +124,22 @@ func (m *mockStorage) AttachContext(entryID string, contextID string) error {
 	if m.attachError != nil {
 		return m.attachError
 	}
-	// ... existing implementation ...
+	if m.entryContexts == nil {
+		m.entryContexts = make(map[string][]string)
+	}
+	m.entryContexts[entryID] = append(m.entryContexts[entryID], contextID)
 	return nil
 }
 
 func (m *mockStorage) DetachContext(entryID string, contextID string) error {
+	contexts := m.entryContexts[entryID]
+	filtered := []string{}
+	for _, ctx := range contexts {
+		if ctx != contextID {
+			filtered = append(filtered, ctx)
+		}
+	}
+	m.entryContexts[entryID] = filtered
 	return nil
 }
 
@@ -822,5 +843,221 @@ func TestHelpOverlayToggle(t *testing.T) {
 
 	if m.helpActive {
 		t.Error("Help should be inactive after toggling off")
+	}
+}
+
+// Task 6: Add Tests for Context Panel Actions
+
+func TestContextPanelAttach(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	testEntry := entry.Entry{ID: "entry01", Content: "Test", CreatedAt: today, UpdatedAt: today}
+
+	store := &mockStorage{
+		contexts: []storage.Context{
+			{ID: "ctx01", Name: "work", Source: "manual", CreatedAt: today, UpdatedAt: today},
+			{ID: "ctx02", Name: "personal", Source: "manual", CreatedAt: today, UpdatedAt: today},
+		},
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {testEntry},
+		},
+		byID: map[string]entry.Entry{
+			"entry01": testEntry,
+		},
+		entryContexts: make(map[string][]string),
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenContextPanel
+	m.contextEntryID = "entry01"
+
+	// Load contexts first
+	loadResult := m.loadContexts()
+	if loadMsg, ok := loadResult.(contextsLoadedMsg); ok {
+		if loadMsg.err != nil {
+			t.Fatalf("Failed to load contexts: %v", loadMsg.err)
+		}
+		updated, _ := m.Update(loadMsg)
+		m = updated.(pickerModel)
+	}
+
+	// Select "work" context (index 0)
+	m.contextList.Select(0)
+
+	// Simulate Enter to attach
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := m.updateContextPanel(msg)
+	m = updatedModel.(pickerModel)
+
+	if cmd == nil {
+		t.Fatal("Expected command to be returned, got nil")
+	}
+
+	result := cmd()
+	if attachMsg, ok := result.(contextsLoadedMsg); ok {
+		if attachMsg.err != nil {
+			t.Fatalf("Attach failed: %v", attachMsg.err)
+		}
+	}
+
+	// Verify context was attached
+	attached := store.entryContexts["entry01"]
+	found := false
+	for _, ctx := range attached {
+		if ctx == "ctx01" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Context 'work' (ctx01) was not attached to entry")
+	}
+}
+
+func TestContextPanelDetach(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	testEntry := entry.Entry{ID: "entry01", Content: "Test", CreatedAt: today, UpdatedAt: today}
+
+	store := &mockStorage{
+		contexts: []storage.Context{
+			{ID: "ctx01", Name: "work", Source: "manual", CreatedAt: today, UpdatedAt: today},
+			{ID: "ctx02", Name: "personal", Source: "manual", CreatedAt: today, UpdatedAt: today},
+		},
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {testEntry},
+		},
+		byID: map[string]entry.Entry{
+			"entry01": testEntry,
+		},
+		entryContexts: map[string][]string{
+			"entry01": {"ctx01"}, // Pre-attach "work" context
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenContextPanel
+	m.contextEntryID = "entry01"
+
+	// Load contexts first
+	loadResult := m.loadContexts()
+	if loadMsg, ok := loadResult.(contextsLoadedMsg); ok {
+		if loadMsg.err != nil {
+			t.Fatalf("Failed to load contexts: %v", loadMsg.err)
+		}
+		updated, _ := m.Update(loadMsg)
+		m = updated.(pickerModel)
+	}
+
+	// Select "work" context (index 0) which is already attached
+	m.contextList.Select(0)
+
+	// Simulate Enter to detach
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := m.updateContextPanel(msg)
+	m = updatedModel.(pickerModel)
+
+	if cmd == nil {
+		t.Fatal("Expected command to be returned, got nil")
+	}
+
+	result := cmd()
+	if detachMsg, ok := result.(contextsLoadedMsg); ok {
+		if detachMsg.err != nil {
+			t.Fatalf("Detach failed: %v", detachMsg.err)
+		}
+	}
+
+	// Verify context was detached
+	attached := store.entryContexts["entry01"]
+	for _, ctx := range attached {
+		if ctx == "ctx01" {
+			t.Error("Context 'work' (ctx01) should have been detached")
+		}
+	}
+}
+
+func TestContextPanelCreate(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	testEntry := entry.Entry{ID: "entry01", Content: "Test", CreatedAt: today, UpdatedAt: today}
+
+	store := &mockStorage{
+		contexts: []storage.Context{},
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {testEntry},
+		},
+		byID: map[string]entry.Entry{
+			"entry01": testEntry,
+		},
+		entryContexts: make(map[string][]string),
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenContextPanel
+	m.contextEntryID = "entry01"
+
+	// Simulate 'n' to initiate creation
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
+	updatedModel, _ := m.updateContextPanel(msg)
+	m = updatedModel.(pickerModel)
+
+	// Should be in context creation mode
+	if !m.contextCreating {
+		t.Error("Should be in context creation mode after pressing 'n'")
+	}
+
+	// Set the context name
+	m.contextInput.SetValue("newcontext")
+
+	// Simulate Enter to confirm creation
+	msg = tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := m.updateContextCreate(msg)
+	m = updatedModel.(pickerModel)
+
+	if cmd == nil {
+		t.Fatal("Expected create command to be returned, got nil")
+	}
+
+	result := cmd()
+	if createMsg, ok := result.(contextCreatedMsg); ok {
+		if createMsg.err != nil {
+			t.Fatalf("Create failed: %v", createMsg.err)
+		}
+	} else {
+		t.Fatalf("Expected contextCreatedMsg, got %T", result)
+	}
+
+	// Verify context was created
+	found := false
+	var createdID string
+	for _, ctx := range store.contexts {
+		if ctx.Name == "newcontext" {
+			found = true
+			createdID = ctx.ID
+			break
+		}
+	}
+	if !found {
+		t.Error("Context 'newcontext' was not created")
+	}
+
+	// Verify auto-attach happened
+	attached := store.entryContexts["entry01"]
+	attachedCorrectly := false
+	for _, ctx := range attached {
+		if ctx == createdID {
+			attachedCorrectly = true
+			break
+		}
+	}
+	if !attachedCorrectly {
+		t.Error("Context 'newcontext' was not auto-attached to entry")
 	}
 }
