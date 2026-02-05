@@ -34,8 +34,8 @@ func TestResolveEditorFallback(t *testing.T) {
 	t.Setenv("EDITOR", "")
 	t.Setenv("VISUAL", "")
 	result := ResolveEditor("")
-	if result != "vi" {
-		t.Errorf("expected vi (fallback), got %q", result)
+	if result != "hx" {
+		t.Errorf("expected hx (fallback), got %q", result)
 	}
 }
 
