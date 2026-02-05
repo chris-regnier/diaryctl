@@ -19,7 +19,10 @@ Please **do not** create a public GitHub issue for security vulnerabilities. Pub
 
 ### 2. Report Privately
 
-Send details to: **[security contact - update with actual email]**
+Please use GitHub's private vulnerability reporting:
+1. Go to the [Security tab](https://github.com/chris-regnier/diaryctl/security)
+2. Click "Report a vulnerability"
+3. Fill out the security advisory form
 
 Include in your report:
 - Description of the vulnerability
@@ -51,13 +54,13 @@ Include in your report:
 
 diaryctl stores diary entries locally:
 - **Markdown backend**: Plain text files in `~/.diaryctl/data/`
-- **SQLite backend**: Database file in `~/.diaryctl/data/diary.db`
+- **SQLite backend**: Database file in `~/.diaryctl/data/diaryctl.db`
 
 **Important**: These files are not encrypted. Do not store highly sensitive information without additional encryption at the filesystem level.
 
 ### Configuration Security
 
-Configuration file: `~/.config/diaryctl/config.yaml`
+Configuration file: `~/.config/diaryctl/config.toml` or `~/.diaryctl/config.toml`
 
 - Uses standard file permissions (user read/write only)
 - Does not store credentials or API keys
