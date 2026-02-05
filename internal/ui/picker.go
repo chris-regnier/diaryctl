@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -88,6 +89,9 @@ type pickerModel struct {
 	dayList  list.Model
 	viewport viewport.Model
 	entry    entry.Entry
+	// Jot mode
+	jotInput  textinput.Model
+	jotActive bool
 	// Common
 	width  int
 	height int
@@ -123,6 +127,14 @@ func (m pickerModel) Init() tea.Cmd {
 
 func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case jotCompleteMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit
+		}
+		// Refresh current screen
+		return m, m.loadTodayCmd
+
 	case todayLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -171,6 +183,22 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Jot input mode — intercept all keys
+		if m.jotActive {
+			return m.updateJotInput(msg)
+		}
+
+		// Global keys (work from any screen when not in input mode)
+		switch msg.String() {
+		case "j":
+			return m.startJot()
+		case "?":
+			// Help overlay — Task 10
+		case "x":
+			// Context panel — Task 9
+		}
+
+		// Screen-specific handling
 		switch m.screen {
 		case screenToday:
 			return m.updateToday(msg)
@@ -403,6 +431,10 @@ type todayLoadedMsg struct {
 	err     error
 }
 
+type jotCompleteMsg struct {
+	err error
+}
+
 func (m pickerModel) loadTodayCmd() tea.Msg {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
@@ -448,6 +480,8 @@ func (m pickerModel) View() string {
 		return "Loading..."
 	}
 
+	var result string
+
 	switch m.screen {
 	case screenToday:
 		if m.dailyEntry == nil && len(m.todayEntries) == 0 {
@@ -456,54 +490,144 @@ func (m pickerModel) View() string {
 				fmt.Sprintf("Today — %s", time.Now().Format("2006-01-02")))
 			empty := "\nNothing yet today.\n\n  j  jot a quick note\n  c  create a new entry\n"
 			footer := helpStyle.Render("j jot  c create  b browse  x ctx  ? help")
-			return header + empty + "\n" + footer
+			result = header + empty + "\n" + footer
+		} else {
+			var sections []string
+
+			// Header
+			count := len(m.todayEntries)
+			if m.dailyEntry != nil {
+				count++
+			}
+			label := "entries"
+			if count == 1 {
+				label = "entry"
+			}
+			header := lipgloss.NewStyle().Bold(true).Render(
+				fmt.Sprintf("Today — %s    %d %s", time.Now().Format("2006-01-02"), count, label))
+			sections = append(sections, header)
+
+			// Daily entry viewport
+			if m.dailyEntry != nil {
+				sections = append(sections, m.dailyViewport.View())
+			}
+
+			// Other entries list
+			if len(m.todayEntries) > 0 {
+				sections = append(sections, m.todayList.View())
+			}
+
+			// Footer
+			footer := helpStyle.Render("j jot  c create  e edit  b browse  x ctx  ? help")
+			sections = append(sections, footer)
+
+			result = strings.Join(sections, "\n")
 		}
-
-		var sections []string
-
-		// Header
-		count := len(m.todayEntries)
-		if m.dailyEntry != nil {
-			count++
-		}
-		label := "entries"
-		if count == 1 {
-			label = "entry"
-		}
-		header := lipgloss.NewStyle().Bold(true).Render(
-			fmt.Sprintf("Today — %s    %d %s", time.Now().Format("2006-01-02"), count, label))
-		sections = append(sections, header)
-
-		// Daily entry viewport
-		if m.dailyEntry != nil {
-			sections = append(sections, m.dailyViewport.View())
-		}
-
-		// Other entries list
-		if len(m.todayEntries) > 0 {
-			sections = append(sections, m.todayList.View())
-		}
-
-		// Footer
-		footer := helpStyle.Render("j jot  c create  e edit  b browse  x ctx  ? help")
-		sections = append(sections, footer)
-
-		return strings.Join(sections, "\n")
 	case screenDateList:
 		footer := helpStyle.Render("↑/↓ navigate • enter select • q quit")
-		return m.dateList.View() + "\n" + footer
+		result = m.dateList.View() + "\n" + footer
 	case screenDayDetail:
 		footer := helpStyle.Render("↑/↓ navigate • enter select • ←/p prev day • →/n next day • esc back • q quit")
-		return m.dayList.View() + "\n" + footer
+		result = m.dayList.View() + "\n" + footer
 	case screenEntryDetail:
 		header := lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("Entry: %s", m.entry.ID))
 		meta := helpStyle.Render(fmt.Sprintf("Created: %s  Modified: %s",
 			m.entry.CreatedAt.Local().Format("2006-01-02 15:04"),
 			m.entry.UpdatedAt.Local().Format("2006-01-02 15:04")))
 		footer := helpStyle.Render("↑/↓ scroll • esc back • q quit")
-		return header + "\n" + meta + "\n\n" + m.viewport.View() + "\n" + footer
+		result = header + "\n" + meta + "\n\n" + m.viewport.View() + "\n" + footer
 	}
-	return ""
+
+	// At the end of View(), before returning:
+	if m.jotActive {
+		return result + "\n" + m.jotInput.View()
+	}
+
+	return result
+}
+
+func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
+	ti := textinput.New()
+	ti.Placeholder = "jot a quick note..."
+	ti.Focus()
+	ti.CharLimit = 500
+	ti.Width = m.width - 4
+	m.jotInput = ti
+	m.jotActive = true
+	return m, textinput.Blink
+}
+
+func (m pickerModel) updateJotInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		content := strings.TrimSpace(m.jotInput.Value())
+		if content == "" {
+			m.jotActive = false
+			return m, nil
+		}
+		m.jotActive = false
+		return m, func() tea.Msg {
+			return m.doJot(content)
+		}
+	case "esc":
+		m.jotActive = false
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.jotInput, cmd = m.jotInput.Update(msg)
+	return m, cmd
+}
+
+func (m pickerModel) doJot(content string) tea.Msg {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	// Get or create today's entry
+	entries, err := m.store.List(storage.ListOptions{Date: &today, Limit: 1})
+	if err != nil {
+		return jotCompleteMsg{err: err}
+	}
+
+	timestamp := now.Format("15:04")
+	jotLine := fmt.Sprintf("- **%s** %s", timestamp, content)
+
+	if len(entries) > 0 {
+		// Append to existing daily entry (oldest)
+		allEntries, err := m.store.List(storage.ListOptions{Date: &today})
+		if err != nil {
+			return jotCompleteMsg{err: err}
+		}
+		daily := allEntries[len(allEntries)-1] // oldest
+		var newContent string
+		if strings.TrimSpace(daily.Content) == "" {
+			newContent = jotLine
+		} else {
+			newContent = daily.Content + "\n" + jotLine
+		}
+		_, err = m.store.Update(daily.ID, newContent, nil)
+		if err != nil {
+			return jotCompleteMsg{err: err}
+		}
+	} else {
+		// Create new daily entry
+		id, err := entry.NewID()
+		if err != nil {
+			return jotCompleteMsg{err: err}
+		}
+		nowUTC := now.UTC()
+		e := entry.Entry{
+			ID:        id,
+			Content:   fmt.Sprintf("# %s\n\n%s", now.Format("2006-01-02"), jotLine),
+			CreatedAt: nowUTC,
+			UpdatedAt: nowUTC,
+		}
+		if err := m.store.Create(e); err != nil {
+			return jotCompleteMsg{err: err}
+		}
+	}
+
+	return jotCompleteMsg{}
 }
 
 // TUIConfig holds configuration needed by the TUI.
