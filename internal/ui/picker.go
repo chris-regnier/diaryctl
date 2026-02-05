@@ -133,7 +133,18 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		// Refresh current screen
-		return m, m.loadTodayCmd
+		switch m.screen {
+		case screenToday:
+			return m, m.loadTodayCmd
+		case screenDateList:
+			// Reload date list by reinitializing on current screen
+			return m.loadDateList()
+		case screenDayDetail:
+			// Reload day detail by reinitializing on current screen
+			return m.loadDayDetail()
+		default:
+			return m, nil
+		}
 
 	case todayLoadedMsg:
 		if msg.err != nil {
@@ -583,8 +594,8 @@ func (m pickerModel) doJot(content string) tea.Msg {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 
-	// Get or create today's entry
-	entries, err := m.store.List(storage.ListOptions{Date: &today, Limit: 1})
+	// Get all today's entries (single fetch)
+	entries, err := m.store.List(storage.ListOptions{Date: &today})
 	if err != nil {
 		return jotCompleteMsg{err: err}
 	}
@@ -594,11 +605,7 @@ func (m pickerModel) doJot(content string) tea.Msg {
 
 	if len(entries) > 0 {
 		// Append to existing daily entry (oldest)
-		allEntries, err := m.store.List(storage.ListOptions{Date: &today})
-		if err != nil {
-			return jotCompleteMsg{err: err}
-		}
-		daily := allEntries[len(allEntries)-1] // oldest
+		daily := entries[len(entries)-1]
 		var newContent string
 		if strings.TrimSpace(daily.Content) == "" {
 			newContent = jotLine
@@ -610,15 +617,23 @@ func (m pickerModel) doJot(content string) tea.Msg {
 			return jotCompleteMsg{err: err}
 		}
 	} else {
-		// Create new daily entry
+		// Create new daily entry with template
 		id, err := entry.NewID()
 		if err != nil {
 			return jotCompleteMsg{err: err}
 		}
 		nowUTC := now.UTC()
+
+		// Use default template if configured
+		var templateRefs []entry.TemplateRef
+		if m.cfg.DefaultTemplate != "" {
+			templateRefs = []entry.TemplateRef{{TemplateName: m.cfg.DefaultTemplate}}
+		}
+
 		e := entry.Entry{
 			ID:        id,
 			Content:   fmt.Sprintf("# %s\n\n%s", now.Format("2006-01-02"), jotLine),
+			Templates: templateRefs,
 			CreatedAt: nowUTC,
 			UpdatedAt: nowUTC,
 		}
