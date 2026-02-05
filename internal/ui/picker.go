@@ -218,6 +218,14 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+	case contextCreatedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit
+		}
+		// Context created successfully, reload the context list
+		return m, m.loadContexts
+
 	case contextsLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -592,6 +600,10 @@ type contextsLoadedMsg struct {
 	err      error
 }
 
+type contextCreatedMsg struct {
+	err error
+}
+
 func (m pickerModel) loadTodayCmd() tea.Msg {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
@@ -916,7 +928,7 @@ func (m pickerModel) updateContextCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg {
 			id, err := entry.NewID()
 			if err != nil {
-				return contextsLoadedMsg{err: err}
+				return contextCreatedMsg{err: err}
 			}
 			now := time.Now().UTC()
 			c := storage.Context{
@@ -927,13 +939,20 @@ func (m pickerModel) updateContextCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				UpdatedAt: now,
 			}
 			if err := m.store.CreateContext(c); err != nil {
-				return contextsLoadedMsg{err: err}
+				return contextCreatedMsg{err: err}
 			}
+
 			// Auto-attach if we have an entry selected
+			var attachErr error
 			if m.contextEntryID != "" {
-				m.store.AttachContext(m.contextEntryID, id)
+				attachErr = m.store.AttachContext(m.contextEntryID, id)
+				if attachErr != nil {
+					// Context was created but attach failed
+					return contextCreatedMsg{err: fmt.Errorf("context created but failed to attach: %w", attachErr)}
+				}
 			}
-			return m.loadContexts()
+
+			return contextCreatedMsg{}
 		}
 	case "esc":
 		m.contextCreating = false

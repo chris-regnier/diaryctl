@@ -12,9 +12,10 @@ import (
 
 // mockStorage implements StorageProvider for testing.
 type mockStorage struct {
-	days    []storage.DaySummary
-	entries map[string][]entry.Entry
-	byID    map[string]entry.Entry
+	days        []storage.DaySummary
+	entries     map[string][]entry.Entry
+	byID        map[string]entry.Entry
+	attachError error // Add this field
 }
 
 func (m *mockStorage) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, error) {
@@ -59,6 +60,10 @@ func (m *mockStorage) CreateContext(c storage.Context) error {
 }
 
 func (m *mockStorage) AttachContext(entryID string, contextID string) error {
+	if m.attachError != nil {
+		return m.attachError
+	}
+	// ... existing implementation ...
 	return nil
 }
 
@@ -459,5 +464,46 @@ func TestContextPanelEscReturnsToCorrectScreen(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestContextAutoAttachErrorHandling(t *testing.T) {
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:    map[string]entry.Entry{},
+	}
+	// Make AttachContext return an error
+	store.attachError = fmt.Errorf("database connection failed")
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenContextPanel
+	m.contextCreating = true
+	m.contextEntryID = "test123"
+	m.contextInput.SetValue("work")
+
+	// Simulate creating a new context
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := m.updateContextCreate(msg)
+	m = updatedModel.(pickerModel)
+
+	// Execute the command to trigger auto-attach
+	if cmd == nil {
+		t.Fatal("Expected command to be returned, got nil")
+	}
+
+	result := cmd()
+
+	// The current implementation returns contextsLoadedMsg via loadContexts(),
+	// but after the fix it should return contextCreatedMsg with the error
+	if msg, ok := result.(contextCreatedMsg); ok {
+		// The error should be captured, not ignored
+		if msg.err == nil {
+			t.Error("Expected error from failed auto-attach, got nil")
+		}
+	} else {
+		// This is the current buggy behavior - it calls loadContexts() which
+		// ignores the attach error
+		t.Error("Expected contextCreatedMsg, but got different message type (bug: error was silently ignored)")
 	}
 }
