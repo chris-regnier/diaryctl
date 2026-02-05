@@ -158,12 +158,31 @@ New storage backends must implement `storage.Storage` interface:
 
 ```go
 type Storage interface {
-    Create(entry *entry.Entry) error
-    Read(id string) (*entry.Entry, error)
-    Update(entry *entry.Entry) error
-    Delete(id string) error
-    List(opts ListOptions) ([]*entry.Entry, error)
-    // ... context and template methods
+	// Entry methods
+	Create(e entry.Entry) error
+	Get(id string) (entry.Entry, error)
+	List(opts ListOptions) ([]entry.Entry, error)
+	ListDays(opts ListDaysOptions) ([]DaySummary, error)
+	Update(id string, content string, templates []entry.TemplateRef) (entry.Entry, error)
+	Delete(id string) error
+	Close() error
+
+	// Template methods
+	CreateTemplate(t Template) error
+	GetTemplate(id string) (Template, error)
+	GetTemplateByName(name string) (Template, error)
+	ListTemplates() ([]Template, error)
+	UpdateTemplate(id string, name string, content string) (Template, error)
+	DeleteTemplate(id string) error
+
+	// Context methods
+	CreateContext(c Context) error
+	GetContext(id string) (Context, error)
+	GetContextByName(name string) (Context, error)
+	ListContexts() ([]Context, error)
+	DeleteContext(id string) error
+	AttachContext(entryID string, contextID string) error
+	DetachContext(entryID string, contextID string) error
 }
 ```
 
