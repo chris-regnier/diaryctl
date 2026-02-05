@@ -28,6 +28,18 @@ const (
 	screenContextPanel
 )
 
+// Focus states for today screen
+const (
+	focusDailyViewport = 0
+	focusEntryList     = 1
+)
+
+// Input validation limits
+const (
+	maxContextNameLength = 100
+	maxJotInputLength    = 500
+)
+
 // StorageProvider abstracts storage operations for the TUI.
 type StorageProvider interface {
 	// Read
@@ -373,11 +385,11 @@ func (m pickerModel) updateToday(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "enter":
-		if m.todayFocus == 0 && m.dailyEntry != nil {
+		if m.todayFocus == focusDailyViewport && m.dailyEntry != nil {
 			// Edit daily entry in $EDITOR
 			return m.startEdit(*m.dailyEntry)
 		}
-		if m.todayFocus == 1 {
+		if m.todayFocus == focusEntryList {
 			if item, ok := m.todayList.SelectedItem().(entryItem); ok {
 				return m.loadEntryDetail(item.entry.ID)
 			}
@@ -387,7 +399,7 @@ func (m pickerModel) updateToday(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Pass to focused component
 	var cmd tea.Cmd
-	if m.todayFocus == 0 && m.dailyEntry != nil {
+	if m.todayFocus == focusDailyViewport && m.dailyEntry != nil {
 		m.dailyViewport, cmd = m.dailyViewport.Update(msg)
 	} else if len(m.todayEntries) > 0 {
 		m.todayList, cmd = m.todayList.Update(msg)
@@ -766,7 +778,7 @@ func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
 	ti := textinput.New()
 	ti.Placeholder = "jot a quick note..."
 	ti.Focus()
-	ti.CharLimit = 500
+	ti.CharLimit = maxJotInputLength
 	ti.Width = m.width - 4
 	m.jotInput = ti
 	m.jotActive = true
@@ -819,9 +831,9 @@ func (m pickerModel) openContextPanel() (tea.Model, tea.Cmd) {
 	// Determine if we have a selected entry
 	switch m.screen {
 	case screenToday:
-		if m.todayFocus == 0 && m.dailyEntry != nil {
+		if m.todayFocus == focusDailyViewport && m.dailyEntry != nil {
 			m.contextEntryID = m.dailyEntry.ID
-		} else if m.todayFocus == 1 {
+		} else if m.todayFocus == focusEntryList {
 			if item, ok := m.todayList.SelectedItem().(entryItem); ok {
 				m.contextEntryID = item.entry.ID
 			}
@@ -905,7 +917,7 @@ func (m pickerModel) updateContextPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		ti := textinput.New()
 		ti.Placeholder = "context name..."
 		ti.Focus()
-		ti.CharLimit = 100
+		ti.CharLimit = maxContextNameLength
 		ti.Width = m.width - 8
 		m.contextInput = ti
 		m.contextCreating = true
