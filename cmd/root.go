@@ -5,10 +5,13 @@ import (
 	"os"
 
 	"github.com/chris-regnier/diaryctl/internal/config"
+	"github.com/chris-regnier/diaryctl/internal/editor"
 	"github.com/chris-regnier/diaryctl/internal/storage"
 	"github.com/chris-regnier/diaryctl/internal/storage/markdown"
 	"github.com/chris-regnier/diaryctl/internal/storage/sqlite"
+	"github.com/chris-regnier/diaryctl/internal/ui"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -53,6 +56,16 @@ var rootCmd = &cobra.Command{
 		}
 
 		return nil
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if !term.IsTerminal(int(os.Stdout.Fd())) {
+			// Non-TTY: fall back to today's entry
+			return todayRun(os.Stdout, false, false)
+		}
+		return ui.RunTUI(store, ui.TUIConfig{
+			Editor:          editor.ResolveEditor(appConfig.Editor),
+			DefaultTemplate: appConfig.DefaultTemplate,
+		})
 	},
 }
 
