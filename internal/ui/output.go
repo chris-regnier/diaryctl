@@ -51,7 +51,11 @@ func FormatEntryFull(w io.Writer, e entry.Entry) {
 		fmt.Fprintf(w, "Contexts: %s\n", strings.Join(names, ", "))
 	}
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, e.Content)
+
+	// Render markdown content as rich text
+	// Use a reasonable default width (80 chars) which will be adjusted by the pager if used
+	rendered := RenderMarkdown(e.Content, 80)
+	fmt.Fprintln(w, rendered)
 }
 
 // FormatEntryList formats a list of entries as a table.

@@ -1,9 +1,17 @@
 package ui
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
+
+// stripANSI removes ANSI escape sequences from a string
+func stripANSI(s string) string {
+	// Regex to match ANSI escape codes
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	return ansiRegex.ReplaceAllString(s, "")
+}
 
 func TestRenderMarkdown(t *testing.T) {
 	tests := []struct {
@@ -95,16 +103,18 @@ Some regular text here.`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := RenderMarkdown(tt.input, tt.width)
+			// Strip ANSI codes for testing content, since Glamour adds color codes
+			gotStripped := stripANSI(got)
 
 			for _, want := range tt.wantContains {
-				if !strings.Contains(got, want) {
-					t.Errorf("RenderMarkdown() output should contain %q, got:\n%s", want, got)
+				if !strings.Contains(gotStripped, want) {
+					t.Errorf("RenderMarkdown() output should contain %q, got:\n%s", want, gotStripped)
 				}
 			}
 
 			for _, notWant := range tt.wantNotContain {
-				if strings.Contains(got, notWant) {
-					t.Errorf("RenderMarkdown() output should not contain %q, got:\n%s", notWant, got)
+				if strings.Contains(gotStripped, notWant) {
+					t.Errorf("RenderMarkdown() output should not contain %q, got:\n%s", notWant, gotStripped)
 				}
 			}
 		})
