@@ -2,19 +2,12 @@ package cmd
 
 import (
 	"bytes"
-	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/chris-regnier/diaryctl/internal/config"
 	"github.com/chris-regnier/diaryctl/internal/daily"
 )
-
-// stripANSI removes ANSI escape sequences from a string
-func stripANSIToday(s string) string {
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
-	return ansiRegex.ReplaceAllString(s, "")
-}
 
 func TestTodayShowsExistingEntry(t *testing.T) {
 	s := setupTestStore(t)
@@ -35,7 +28,7 @@ func TestTodayShowsExistingEntry(t *testing.T) {
 
 	output := buf.String()
 	// Strip ANSI codes for testing since markdown rendering adds color codes
-	outputStripped := stripANSIToday(output)
+	outputStripped := stripANSI(output)
 
 	if !strings.Contains(outputStripped, e.ID) {
 		t.Errorf("expected output to contain entry ID %q, got:\n%s", e.ID, outputStripped)

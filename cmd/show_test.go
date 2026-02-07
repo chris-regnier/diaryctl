@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -12,12 +11,6 @@ import (
 	"github.com/chris-regnier/diaryctl/internal/storage"
 	"github.com/chris-regnier/diaryctl/internal/ui"
 )
-
-// stripANSI removes ANSI escape sequences from a string
-func stripANSI(s string) string {
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
-	return ansiRegex.ReplaceAllString(s, "")
-}
 
 func TestShowFullContent(t *testing.T) {
 	s := setupTestStore(t)
