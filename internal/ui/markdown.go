@@ -9,6 +9,9 @@ import (
 // markdownRenderer is a cached glamour renderer instance
 var markdownRenderer *glamour.TermRenderer
 
+// cachedWidth stores the width used for the current renderer
+var cachedWidth int
+
 // initMarkdownRenderer initializes the glamour renderer with the given width
 func initMarkdownRenderer(width int) error {
 	if width < 1 {
@@ -26,6 +29,7 @@ func initMarkdownRenderer(width int) error {
 	}
 
 	markdownRenderer = renderer
+	cachedWidth = width
 	return nil
 }
 
@@ -33,6 +37,11 @@ func initMarkdownRenderer(width int) error {
 func updateMarkdownWidth(width int) error {
 	if width < 1 {
 		width = 80
+	}
+
+	// Only recreate renderer if width actually changed
+	if width == cachedWidth {
+		return nil
 	}
 
 	renderer, err := glamour.NewTermRenderer(
@@ -44,6 +53,7 @@ func updateMarkdownWidth(width int) error {
 	}
 
 	markdownRenderer = renderer
+	cachedWidth = width
 	return nil
 }
 

@@ -1,17 +1,9 @@
 package ui
 
 import (
-	"regexp"
 	"strings"
 	"testing"
 )
-
-// stripANSI removes ANSI escape sequences from a string
-func stripANSI(s string) string {
-	// Regex to match ANSI escape codes
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
-	return ansiRegex.ReplaceAllString(s, "")
-}
 
 func TestRenderMarkdown(t *testing.T) {
 	tests := []struct {
