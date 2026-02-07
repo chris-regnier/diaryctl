@@ -14,22 +14,7 @@ import (
 func NewDiaryMCPServer(store storage.Storage) (*mcp.Server, mcp.Transport) {
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 
-	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "diaryctl",
-		Version: "1.0.0",
-	}, nil)
-
-	// Register search_entries tool
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "search_entries",
-		Description: "Fuzzy search diary entries by content",
-	}, searchHandler(store))
-
-	// Register filter_entries tool
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "filter_entries",
-		Description: "Filter diary entries by date range and template",
-	}, filterHandler(store))
+	server := createMCPServer(store)
 
 	// Start server in background
 	go func() {
@@ -39,7 +24,35 @@ func NewDiaryMCPServer(store storage.Storage) (*mcp.Server, mcp.Transport) {
 	return server, clientTransport
 }
 
-func searchHandler(store storage.Storage) func(ctx context.Context, req *mcp.CallToolRequest, input SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
+// CreateMCPServer creates an MCP server with registered diary tools.
+// Use this to create a server that can be connected with any transport.
+func CreateMCPServer(store storage.Storage) *mcp.Server {
+	return createMCPServer(store)
+}
+
+func createMCPServer(store storage.Storage) *mcp.Server {
+	server := mcp.NewServer(&mcp.Implementation{
+		Name:    "diaryctl",
+		Version: "1.0.0",
+	}, nil)
+
+	// Register search_entries tool
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "search_entries",
+		Description: "Fuzzy search diary entries by content",
+	}, SearchHandler(store))
+
+	// Register filter_entries tool
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "filter_entries",
+		Description: "Filter diary entries by date range and template",
+	}, FilterHandler(store))
+
+	return server
+}
+
+// SearchHandler returns the handler function for the search_entries MCP tool.
+func SearchHandler(store storage.Storage) func(ctx context.Context, req *mcp.CallToolRequest, input SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
 		limit := input.Limit
 		if limit <= 0 {
@@ -71,7 +84,8 @@ func searchHandler(store storage.Storage) func(ctx context.Context, req *mcp.Cal
 	}
 }
 
-func filterHandler(store storage.Storage) func(ctx context.Context, req *mcp.CallToolRequest, input FilterInput) (*mcp.CallToolResult, FilterOutput, error) {
+// FilterHandler returns the handler function for the filter_entries MCP tool.
+func FilterHandler(store storage.Storage) func(ctx context.Context, req *mcp.CallToolRequest, input FilterInput) (*mcp.CallToolResult, FilterOutput, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input FilterInput) (*mcp.CallToolResult, FilterOutput, error) {
 		opts := storage.ListOptions{
 			Limit: input.Limit,
