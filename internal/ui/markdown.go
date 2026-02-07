@@ -15,10 +15,10 @@ func initMarkdownRenderer(width int) error {
 		width = 80 // sensible default
 	}
 
-	// Use "auto" style to adapt to terminal background (dark/light)
-	// Alternative styles: "dark", "light", "pink", "notty"
+	// Use "dark" style for rich terminal rendering with colors and styling
+	// Alternative styles: "auto", "light", "pink", "notty"
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStylePath("dark"),
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {
@@ -36,7 +36,7 @@ func updateMarkdownWidth(width int) error {
 	}
 
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStylePath("dark"),
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {

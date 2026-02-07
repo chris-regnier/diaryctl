@@ -279,7 +279,9 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Build daily viewport
 		if msg.daily != nil {
 			m.dailyViewport = viewport.New(m.width, m.dailyViewportHeight())
-			m.dailyViewport.SetContent(msg.daily.Content)
+			// Render markdown content as rich text
+			rendered := RenderMarkdown(msg.daily.Content, m.width)
+			m.dailyViewport.SetContent(rendered)
 		}
 		if m.ready {
 			m.layoutToday()
@@ -554,7 +556,10 @@ func (m pickerModel) formatEntry() string {
 	fmt.Fprintf(&b, "Created: %s\n", m.entry.CreatedAt.Local().Format("2006-01-02 15:04"))
 	fmt.Fprintf(&b, "Modified: %s\n", m.entry.UpdatedAt.Local().Format("2006-01-02 15:04"))
 	fmt.Fprintln(&b)
-	fmt.Fprintln(&b, m.entry.Content)
+
+	// Render markdown content as rich text
+	rendered := RenderMarkdown(m.entry.Content, m.viewport.Width)
+	fmt.Fprintln(&b, rendered)
 	return b.String()
 }
 
@@ -576,7 +581,9 @@ func (m *pickerModel) layoutToday() {
 		vpHeight := m.dailyViewportHeight()
 		m.dailyViewport.Width = m.width
 		m.dailyViewport.Height = vpHeight
-		m.dailyViewport.SetContent(m.dailyEntry.Content)
+		// Render markdown content as rich text
+		rendered := RenderMarkdown(m.dailyEntry.Content, m.width)
+		m.dailyViewport.SetContent(rendered)
 
 		listHeight := m.height - headerHeight - vpHeight - footerHeight - 1 // 1 for separator
 		if listHeight < 3 {

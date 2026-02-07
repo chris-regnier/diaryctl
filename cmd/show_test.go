@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,12 @@ import (
 	"github.com/chris-regnier/diaryctl/internal/storage"
 	"github.com/chris-regnier/diaryctl/internal/ui"
 )
+
+// stripANSI removes ANSI escape sequences from a string
+func stripANSI(s string) string {
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	return ansiRegex.ReplaceAllString(s, "")
+}
 
 func TestShowFullContent(t *testing.T) {
 	s := setupTestStore(t)
@@ -28,14 +35,16 @@ func TestShowFullContent(t *testing.T) {
 	var buf bytes.Buffer
 	ui.FormatEntryFull(&buf, got)
 	output := buf.String()
+	// Strip ANSI codes for testing since markdown rendering adds color codes
+	outputStripped := stripANSI(output)
 
-	if !strings.Contains(output, "Entry: "+id) {
+	if !strings.Contains(outputStripped, "Entry: "+id) {
 		t.Error("missing entry ID in output")
 	}
-	if !strings.Contains(output, "Full diary entry content here") {
+	if !strings.Contains(outputStripped, "Full diary entry content here") {
 		t.Error("missing content in output")
 	}
-	if !strings.Contains(output, "Created:") {
+	if !strings.Contains(outputStripped, "Created:") {
 		t.Error("missing Created header")
 	}
 }
