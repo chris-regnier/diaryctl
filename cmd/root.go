@@ -83,8 +83,3 @@ func init() {
 	rootCmd.SilenceErrors = true
 	rootCmd.SilenceUsage = true
 }
-
-func exitWithError(msg string, code int) {
-	fmt.Fprintln(os.Stderr, msg)
-	os.Exit(code)
-}
