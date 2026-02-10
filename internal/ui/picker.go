@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -123,7 +124,7 @@ type pickerModel struct {
 	viewport viewport.Model
 	entry    entry.Entry
 	// Jot mode
-	jotInput  textinput.Model
+	jotInput  textarea.Model
 	jotActive bool
 	// Delete confirmation mode
 	deleteActive bool
@@ -770,7 +771,7 @@ func (m pickerModel) helpOverlay() string {
   tab        switch focus (today)
 
 Actions
-  j          jot a quick note
+  j          jot a note (^J for newline)
   c          create new entry
   e          edit selected entry
   d          delete selected entry
@@ -782,18 +783,32 @@ Actions
 }
 
 func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
-	ti := textinput.New()
-	ti.Placeholder = "jot a quick note..."
-	ti.Focus()
-	ti.CharLimit = maxJotInputLength
-	ti.Width = m.width - 4
-	m.jotInput = ti
+	ta := textarea.New()
+	ta.Placeholder = "jot (^J=newline ↵=submit)..."
+	ta.Focus()
+	ta.CharLimit = maxJotInputLength
+	ta.SetWidth(m.width - 4)
+	// Dynamic height: use 25% of screen height or max 5 lines
+	height := m.height / 4
+	if height > 5 {
+		height = 5
+	}
+	if height < 3 {
+		height = 3
+	}
+	ta.SetHeight(height)
+	ta.ShowLineNumbers = false
+	m.jotInput = ta
 	m.jotActive = true
-	return m, textinput.Blink
+	return m, textarea.Blink
 }
 
 func (m pickerModel) updateJotInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "ctrl+j":
+		// Insert a newline
+		m.jotInput.InsertString("\n")
+		return m, nil
 	case "enter":
 		content := strings.TrimSpace(m.jotInput.Value())
 		if content == "" {

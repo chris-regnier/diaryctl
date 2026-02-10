@@ -625,9 +625,12 @@ func TestJotActionCreatesNewEntry(t *testing.T) {
 	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
 	m := newTUIModel(store, cfg)
 	m.screen = screenToday
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
 
 	// Activate jot mode
-	m.jotActive = true
+	started, _ := m.startJot()
+	m = started.(pickerModel)
 	m.jotInput.SetValue("Meeting notes at 2pm")
 
 	// Simulate Enter key to submit
@@ -684,7 +687,12 @@ func TestJotActionAppendsToExistingEntry(t *testing.T) {
 	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
 	m := newTUIModel(store, cfg)
 	m.screen = screenToday
-	m.jotActive = true
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	// Activate jot mode
+	started, _ := m.startJot()
+	m = started.(pickerModel)
 	m.jotInput.SetValue("Additional note")
 
 	// Submit jot
@@ -1061,5 +1069,219 @@ func TestContextPanelCreate(t *testing.T) {
 	}
 	if !attachedCorrectly {
 		t.Error("Context 'newcontext' was not auto-attached to entry")
+	}
+}
+// TestJotMultiline verifies that Ctrl+J inserts newlines and Enter submits
+func TestJotMultiline(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	dailyEntry := entry.Entry{
+		ID:        "daily-1",
+		Content:   "# " + today.Format("2006-01-02"),
+		CreatedAt: today,
+	}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {dailyEntry},
+		},
+		byID: map[string]entry.Entry{
+			"daily-1": dailyEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	// Start jot
+	started, _ := m.startJot()
+	m = started.(pickerModel)
+	if !m.jotActive {
+		t.Fatal("Expected jotActive to be true")
+	}
+
+	// Type first line
+	m.jotInput.SetValue("Line 1")
+
+	// Press Ctrl+J to insert newline
+	updated, cmd := m.updateJotInput(tea.KeyMsg{Type: tea.KeyCtrlJ})
+	m = updated.(pickerModel)
+	if !m.jotActive {
+		t.Error("Expected jotActive to still be true after Ctrl+J")
+	}
+	if cmd != nil {
+		// If there's a command, it shouldn't be a submit
+		result := cmd()
+		if _, isJotComplete := result.(jotCompleteMsg); isJotComplete {
+			t.Error("Ctrl+J should not submit the jot")
+		}
+	}
+
+	// Verify newline was inserted
+	value := m.jotInput.Value()
+	if !strings.Contains(value, "\n") {
+		t.Error("Expected newline to be inserted after Ctrl+J")
+	}
+
+	// Type second line
+	m.jotInput.SetValue("Line 1\nLine 2")
+
+	// Press Enter to submit
+	updated, cmd = m.updateJotInput(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(pickerModel)
+	if m.jotActive {
+		t.Error("Expected jotActive to be false after Enter")
+	}
+	if cmd == nil {
+		t.Fatal("Expected cmd to be set after Enter")
+	}
+
+	// Execute the jot command
+	result := cmd()
+	jotMsg, ok := result.(jotCompleteMsg)
+	if !ok {
+		t.Fatalf("Expected jotCompleteMsg, got %T", result)
+	}
+	if jotMsg.err != nil {
+		t.Fatalf("doJot returned error: %v", jotMsg.err)
+	}
+
+	// Verify multiline content was saved
+	updatedEntry := store.byID["daily-1"]
+	if !strings.Contains(updatedEntry.Content, "Line 1") {
+		t.Errorf("Expected content to contain 'Line 1', got: %s", updatedEntry.Content)
+	}
+	if !strings.Contains(updatedEntry.Content, "Line 2") {
+		t.Errorf("Expected content to contain 'Line 2', got: %s", updatedEntry.Content)
+	}
+}
+
+// TestJotEnterDoesNotInsertNewline verifies Enter submits, not inserts newline
+func TestJotEnterDoesNotInsertNewline(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	dailyEntry := entry.Entry{
+		ID:        "daily-1",
+		Content:   "# " + today.Format("2006-01-02"),
+		CreatedAt: today,
+	}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {dailyEntry},
+		},
+		byID: map[string]entry.Entry{
+			"daily-1": dailyEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	// Start jot
+	started, _ := m.startJot()
+	m = started.(pickerModel)
+
+	// Type single line
+	m.jotInput.SetValue("Single line text")
+
+	// Press Enter
+	updated, cmd := m.updateJotInput(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(pickerModel)
+
+	// Verify it submits (jotActive becomes false)
+	if m.jotActive {
+		t.Error("Enter should deactivate jot mode (submit)")
+	}
+
+	// Verify a command was returned (the doJot command)
+	if cmd == nil {
+		t.Fatal("Enter should return a doJot command")
+	}
+
+	// Execute and verify it's a jotCompleteMsg
+	result := cmd()
+	if _, ok := result.(jotCompleteMsg); !ok {
+		t.Errorf("Enter should submit jot, got %T instead", result)
+	}
+}
+
+// TestJotEscape verifies Esc cancels jot input
+func TestJotEscape(t *testing.T) {
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:    map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	// Start jot
+	started, _ := m.startJot()
+	m = started.(pickerModel)
+	if !m.jotActive {
+		t.Fatal("Expected jotActive to be true")
+	}
+
+	// Type some text
+	m.jotInput.SetValue("Some text")
+
+	// Press Escape
+	updated, cmd := m.updateJotInput(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(pickerModel)
+
+	// Verify jot was cancelled
+	if m.jotActive {
+		t.Error("Esc should cancel jot mode")
+	}
+
+	// Verify no command was returned (no submission)
+	if cmd != nil {
+		t.Error("Esc should not return a command (no submission)")
+	}
+}
+
+// TestJotEmptySubmit verifies empty jot is cancelled, not submitted
+func TestJotEmptySubmit(t *testing.T) {
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:    map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	// Start jot
+	started, _ := m.startJot()
+	m = started.(pickerModel)
+
+	// Don't type anything (empty)
+
+	// Press Enter
+	updated, cmd := m.updateJotInput(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(pickerModel)
+
+	// Verify jot was cancelled (not submitted)
+	if m.jotActive {
+		t.Error("Empty jot should be cancelled")
+	}
+
+	// Verify no command was returned
+	if cmd != nil {
+		t.Error("Empty jot should not return a command")
 	}
 }
