@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chris-regnier/diaryctl/internal/config"
 	"github.com/chris-regnier/diaryctl/internal/daily"
@@ -34,8 +35,9 @@ func TestTodayShowsExistingEntry(t *testing.T) {
 		t.Errorf("expected output to contain entry ID %q, got:\n%s", e.ID, outputStripped)
 	}
 	// Content might be transformed by markdown rendering, so just check for date pattern
-	if !strings.Contains(outputStripped, "2026-02-06") {
-		t.Errorf("expected output to contain date, got:\n%s", outputStripped)
+	expectedDate := time.Now().Format("2006-01-02")
+	if !strings.Contains(outputStripped, expectedDate) {
+		t.Errorf("expected output to contain date %q, got:\n%s", expectedDate, outputStripped)
 	}
 }
 
