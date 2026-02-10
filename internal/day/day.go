@@ -53,21 +53,30 @@ func (d *Day) AddBlock(b block.Block) {
 		d.CreatedAt = time.Now()
 	}
 
+	// Update the day's UpdatedAt timestamp
+	d.UpdatedAt = time.Now()
+
 	// Add the block
 	d.Blocks = append(d.Blocks, b)
 
 	// Sort blocks by CreatedAt
 	d.SortBlocks()
-
-	// Update the day's UpdatedAt timestamp
-	d.UpdatedAt = time.Now()
 }
 
 // SortBlocks sorts the day's blocks in ascending order by Block.CreatedAt.
-// This ensures that blocks are always displayed in chronological order.
+// For blocks with identical timestamps, sorts by ID to ensure stable ordering.
+// This ensures that blocks are always displayed in consistent chronological order.
 func (d *Day) SortBlocks() {
 	sort.Slice(d.Blocks, func(i, j int) bool {
-		return d.Blocks[i].CreatedAt.Before(d.Blocks[j].CreatedAt)
+		// Primary sort: by CreatedAt timestamp
+		if d.Blocks[i].CreatedAt.Before(d.Blocks[j].CreatedAt) {
+			return true
+		}
+		if d.Blocks[i].CreatedAt.Equal(d.Blocks[j].CreatedAt) {
+			// Secondary sort: by ID for stable ordering when timestamps are equal
+			return d.Blocks[i].ID < d.Blocks[j].ID
+		}
+		return false
 	})
 }
 

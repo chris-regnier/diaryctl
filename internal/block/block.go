@@ -4,6 +4,7 @@ package block
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"time"
 
@@ -52,13 +53,14 @@ var (
 // NewID generates a new 8-character lowercase alphanumeric block ID
 // using the nanoid algorithm with a custom alphabet.
 // The generated ID has high entropy and is suitable for use as a unique identifier.
+// Panics if ID generation fails, as this is a critical system failure.
 func NewID() string {
 	// Use custom alphabet for lowercase alphanumeric characters
 	id, err := gonanoid.Generate(idAlphabet, idLength)
 	if err != nil {
-		// This should never happen with a valid alphabet and length
-		// If it does, fallback to a timestamp-based ID
-		return "error000"
+		// ID generation failure is critical - this should never happen with valid alphabet/length
+		// If it does happen, we must panic as continuing could create data corruption
+		panic(fmt.Sprintf("critical: failed to generate block ID: %v", err))
 	}
 	return id
 }
