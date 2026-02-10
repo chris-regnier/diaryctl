@@ -97,3 +97,37 @@ func TestValidateID(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateContent verifies that ValidateContent correctly validates content
+func TestValidateContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		wantErr bool
+	}{
+		{
+			name:    "valid non-empty",
+			content: "This is a valid diary entry",
+			wantErr: false,
+		},
+		{
+			name:    "valid single char",
+			content: "a",
+			wantErr: false,
+		},
+		{
+			name:    "invalid empty",
+			content: "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := block.ValidateContent(tt.content)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateContent(%q) error = %v, wantErr %v", tt.content, err, tt.wantErr)
+			}
+		})
+	}
+}
