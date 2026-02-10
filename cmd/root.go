@@ -84,3 +84,29 @@ func init() {
 	rootCmd.SilenceErrors = true
 	rootCmd.SilenceUsage = true
 }
+
+// NewRootV2Command creates a root command for the v2 data model.
+// This is a helper function for testing and programmatic usage of the CLI
+// with the StorageV2 interface.
+//
+// Parameters:
+//   - store: A StorageV2 implementation to use for all operations
+//
+// Returns:
+//   - A configured cobra.Command with all v2 subcommands attached
+func NewRootV2Command(store storage.StorageV2) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "diaryctl",
+		Short: "A diary management CLI tool",
+		Long:  "diaryctl is a command-line tool for managing personal diary entries with a block-based data model.",
+	}
+
+	// Silence Cobra's built-in error and usage printing
+	cmd.SilenceErrors = true
+	cmd.SilenceUsage = true
+
+	// Add v2 commands
+	cmd.AddCommand(NewJotV2Command(store))
+
+	return cmd
+}
