@@ -76,7 +76,7 @@ type Storage interface {
 	GetTemplate(id string) (Template, error)
 	GetTemplateByName(name string) (Template, error)
 	ListTemplates() ([]Template, error)
-	UpdateTemplate(id string, name string, content string) (Template, error)
+	UpdateTemplate(id string, name string, content string, attributes map[string]string) (Template, error)
 	DeleteTemplate(id string) error
 
 	// Context methods
