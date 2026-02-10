@@ -23,6 +23,7 @@ type Config struct {
 	DataDir          string      `mapstructure:"data_dir"`
 	Editor           string      `mapstructure:"editor"`
 	DefaultTemplate  string      `mapstructure:"default_template"`
+	MaxWidth         int         `mapstructure:"max_width"`
 	ContextProviders []string    `mapstructure:"context_providers"`
 	ContextResolvers []string    `mapstructure:"context_resolvers"`
 	Shell            ShellConfig `mapstructure:"shell"`
@@ -46,6 +47,7 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("data_dir", DefaultDataDir())
 	v.SetDefault("editor", "")
 	v.SetDefault("default_template", "")
+	v.SetDefault("max_width", 100)
 	v.SetDefault("context_providers", []string{})
 	v.SetDefault("context_resolvers", []string{})
 	v.SetDefault("shell.cache_ttl", "5m")

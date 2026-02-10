@@ -65,6 +65,7 @@ var rootCmd = &cobra.Command{
 		return ui.RunTUI(store, ui.TUIConfig{
 			Editor:          editor.ResolveEditor(appConfig.Editor),
 			DefaultTemplate: appConfig.DefaultTemplate,
+			MaxWidth:        appConfig.MaxWidth,
 		})
 	},
 }
