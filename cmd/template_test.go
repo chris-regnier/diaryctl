@@ -88,7 +88,7 @@ func TestTemplateUpdate(t *testing.T) {
 
 	tmpl := createTestTemplate(t, "daily", "# Daily Entry")
 
-	updated, err := store.UpdateTemplate(tmpl.ID, "daily", "# Updated Daily Entry")
+	updated, err := store.UpdateTemplate(tmpl.ID, "daily", "# Updated Daily Entry", nil)
 	if err != nil {
 		t.Fatalf("UpdateTemplate: %v", err)
 	}
