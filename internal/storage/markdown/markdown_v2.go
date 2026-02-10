@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/chris-regnier/diaryctl/internal/block"
@@ -21,6 +24,10 @@ type MarkdownV2 struct {
 
 // Compile-time check that MarkdownV2 implements storage.StorageV2
 var _ storage.StorageV2 = (*MarkdownV2)(nil)
+
+// templateIDPattern defines the valid format for template IDs (e.g., tmpl0001).
+// This prevents directory traversal attacks and ensures consistent naming.
+var templateIDPattern = regexp.MustCompile(`^tmpl\d{4}$`)
 
 // NewV2 creates a new MarkdownV2 storage instance.
 // It ensures the necessary directories exist (days/, templates/).
@@ -90,6 +97,12 @@ func (m *MarkdownV2) loadDay(date time.Time) (day.Day, error) {
 
 // saveDay writes a day to disk as JSON.
 func (m *MarkdownV2) saveDay(d day.Day) error {
+	// Ensure days directory exists
+	daysPath := filepath.Join(m.basePath, "days")
+	if err := os.MkdirAll(daysPath, 0755); err != nil {
+		return fmt.Errorf("failed to create days directory: %w", err)
+	}
+
 	path := m.getDayPath(d.Date)
 
 	// Marshal day to JSON with indentation for readability
@@ -105,7 +118,10 @@ func (m *MarkdownV2) saveDay(d day.Day) error {
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath) // Clean up temp file on failure
+		// Clean up temp file on failure and wrap both errors
+		if removeErr := os.Remove(tmpPath); removeErr != nil {
+			return fmt.Errorf("failed to rename day file: %w (cleanup error: %v)", err, removeErr)
+		}
 		return fmt.Errorf("failed to rename day file: %w", err)
 	}
 
@@ -186,7 +202,7 @@ func (m *MarkdownV2) CreateBlock(date time.Time, blk block.Block) error {
 func (m *MarkdownV2) GetBlock(blockID string) (block.Block, time.Time, error) {
 	// Validate block ID
 	if blockID == "" {
-		return block.Block{}, time.Time{}, storage.ErrValidation
+		return block.Block{}, time.Time{}, fmt.Errorf("%w: ID cannot be empty", storage.ErrValidation)
 	}
 
 	// Search through all day files to find the block
@@ -234,7 +250,7 @@ func (m *MarkdownV2) GetBlock(blockID string) (block.Block, time.Time, error) {
 func (m *MarkdownV2) UpdateBlock(blockID string, content string, attributes map[string]string) error {
 	// Validate inputs
 	if blockID == "" {
-		return storage.ErrValidation
+		return fmt.Errorf("%w: ID cannot be empty", storage.ErrValidation)
 	}
 	if err := block.ValidateContent(content); err != nil {
 		return fmt.Errorf("%w: %v", storage.ErrValidation, err)
@@ -274,7 +290,7 @@ func (m *MarkdownV2) UpdateBlock(blockID string, content string, attributes map[
 func (m *MarkdownV2) DeleteBlock(blockID string) error {
 	// Validate block ID
 	if blockID == "" {
-		return storage.ErrValidation
+		return fmt.Errorf("%w: ID cannot be empty", storage.ErrValidation)
 	}
 
 	// Find the block
@@ -352,6 +368,12 @@ func (m *MarkdownV2) loadTemplate(id string) (storage.Template, error) {
 
 // saveTemplate writes a template to disk as JSON.
 func (m *MarkdownV2) saveTemplate(t storage.Template) error {
+	// Ensure templates directory exists
+	templatesPath := filepath.Join(m.basePath, "templates")
+	if err := os.MkdirAll(templatesPath, 0755); err != nil {
+		return fmt.Errorf("failed to create templates directory: %w", err)
+	}
+
 	path := m.getTemplatePath(t.ID)
 
 	// Marshal template to JSON with indentation for readability
@@ -367,7 +389,10 @@ func (m *MarkdownV2) saveTemplate(t storage.Template) error {
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath) // Clean up temp file on failure
+		// Clean up temp file on failure and wrap both errors
+		if removeErr := os.Remove(tmpPath); removeErr != nil {
+			return fmt.Errorf("failed to rename template file: %w (cleanup error: %v)", err, removeErr)
+		}
 		return fmt.Errorf("failed to rename template file: %w", err)
 	}
 
@@ -380,10 +405,14 @@ func (m *MarkdownV2) saveTemplate(t storage.Template) error {
 func (m *MarkdownV2) CreateTemplate(t storage.Template) error {
 	// Validate template
 	if t.ID == "" {
-		return fmt.Errorf("%w: ID must be set", storage.ErrValidation)
+		return fmt.Errorf("%w: ID cannot be empty", storage.ErrValidation)
 	}
-	if t.Name == "" {
-		return fmt.Errorf("%w: Name must be set", storage.ErrValidation)
+	// Validate template ID format to prevent directory traversal
+	if !templateIDPattern.MatchString(t.ID) {
+		return fmt.Errorf("%w: ID must match format 'tmpl####' (e.g., tmpl0001)", storage.ErrValidation)
+	}
+	if strings.TrimSpace(t.Name) == "" {
+		return fmt.Errorf("%w: Name cannot be empty or whitespace", storage.ErrValidation)
 	}
 	if t.CreatedAt.IsZero() {
 		return fmt.Errorf("%w: CreatedAt must be set", storage.ErrValidation)
@@ -407,7 +436,7 @@ func (m *MarkdownV2) CreateTemplate(t storage.Template) error {
 func (m *MarkdownV2) GetTemplate(id string) (storage.Template, error) {
 	// Validate ID
 	if id == "" {
-		return storage.Template{}, storage.ErrValidation
+		return storage.Template{}, fmt.Errorf("%w: ID cannot be empty", storage.ErrValidation)
 	}
 
 	return m.loadTemplate(id)
@@ -419,7 +448,7 @@ func (m *MarkdownV2) GetTemplate(id string) (storage.Template, error) {
 func (m *MarkdownV2) GetTemplateByName(name string) (storage.Template, error) {
 	// Validate name
 	if name == "" {
-		return storage.Template{}, storage.ErrValidation
+		return storage.Template{}, fmt.Errorf("%w: name cannot be empty", storage.ErrValidation)
 	}
 
 	// List all templates and search for matching name
@@ -470,14 +499,9 @@ func (m *MarkdownV2) ListTemplates() ([]storage.Template, error) {
 	}
 
 	// Sort templates by name ascending
-	// Simple bubble sort for small collections
-	for i := 0; i < len(templates); i++ {
-		for j := i + 1; j < len(templates); j++ {
-			if templates[i].Name > templates[j].Name {
-				templates[i], templates[j] = templates[j], templates[i]
-			}
-		}
-	}
+	sort.Slice(templates, func(i, j int) bool {
+		return templates[i].Name < templates[j].Name
+	})
 
 	return templates, nil
 }
@@ -489,10 +513,10 @@ func (m *MarkdownV2) ListTemplates() ([]storage.Template, error) {
 func (m *MarkdownV2) UpdateTemplate(id string, name string, content string, attributes map[string]string) (storage.Template, error) {
 	// Validate inputs
 	if id == "" {
-		return storage.Template{}, storage.ErrValidation
+		return storage.Template{}, fmt.Errorf("%w: ID cannot be empty", storage.ErrValidation)
 	}
-	if name == "" {
-		return storage.Template{}, fmt.Errorf("%w: name cannot be empty", storage.ErrValidation)
+	if strings.TrimSpace(name) == "" {
+		return storage.Template{}, fmt.Errorf("%w: name cannot be empty or whitespace", storage.ErrValidation)
 	}
 
 	// Load existing template
@@ -521,7 +545,7 @@ func (m *MarkdownV2) UpdateTemplate(id string, name string, content string, attr
 func (m *MarkdownV2) DeleteTemplate(id string) error {
 	// Validate ID
 	if id == "" {
-		return storage.ErrValidation
+		return fmt.Errorf("%w: ID cannot be empty", storage.ErrValidation)
 	}
 
 	path := m.getTemplatePath(id)
