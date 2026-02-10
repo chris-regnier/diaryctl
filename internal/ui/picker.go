@@ -256,7 +256,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.contextEntryID != "" {
 			title = fmt.Sprintf("Contexts for %s", m.contextEntryID)
 		}
-		m.contextList = list.New(items, list.NewDefaultDelegate(), m.width-4, m.height-6)
+		m.contextList = list.New(items, list.NewDefaultDelegate(), m.contentWidth()-4, m.height-6)
 		m.contextList.Title = title
 		m.contextList.SetShowHelp(false)
 		m.screen = screenContextPanel
@@ -279,9 +279,9 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.todayList.SetShowHelp(false)
 		// Build daily viewport
 		if msg.daily != nil {
-			m.dailyViewport = viewport.New(m.width, m.dailyViewportHeight())
+			m.dailyViewport = viewport.New(m.contentWidth(), m.dailyViewportHeight())
 			// Render markdown content as rich text
-			rendered := RenderMarkdown(msg.daily.Content, m.width)
+			rendered := RenderMarkdown(msg.daily.Content, m.contentWidth())
 			m.dailyViewport.SetContent(rendered)
 		}
 		if m.ready {
@@ -301,11 +301,11 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenToday:
 			m.layoutToday()
 		case screenDateList:
-			m.dateList.SetSize(msg.Width, msg.Height-footerHeight)
+			m.dateList.SetSize(m.contentWidth(), msg.Height-footerHeight)
 		case screenDayDetail:
-			m.dayList.SetSize(msg.Width, msg.Height-footerHeight)
+			m.dayList.SetSize(m.contentWidth(), msg.Height-footerHeight)
 		case screenEntryDetail:
-			m.viewport.Width = msg.Width
+			m.viewport.Width = m.contentWidth()
 			m.viewport.Height = msg.Height - headerHeight - footerHeight
 			m.viewport.SetContent(m.formatEntry())
 		}
@@ -442,7 +442,7 @@ func (m pickerModel) updateDayDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "backspace":
 		m.screen = screenDateList
 		if m.ready {
-			m.dateList.SetSize(m.width, m.height-2)
+			m.dateList.SetSize(m.contentWidth(), m.height-2)
 		}
 		return m, nil
 	case "enter":
@@ -487,7 +487,7 @@ func (m pickerModel) updateEntryDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "backspace":
 		m.screen = screenDayDetail
 		if m.ready {
-			m.dayList.SetSize(m.width, m.height-2)
+			m.dayList.SetSize(m.contentWidth(), m.height-2)
 		}
 		return m, nil
 	case "e":
@@ -525,7 +525,7 @@ func (m pickerModel) loadDayDetail() (tea.Model, tea.Cmd) {
 	m.dayList.Title = fmt.Sprintf("%s (%d %s)", date.Format("2006-01-02"), day.Count, label)
 	m.dayList.SetShowHelp(false)
 	if m.ready {
-		m.dayList.SetSize(m.width, m.height-2)
+		m.dayList.SetSize(m.contentWidth(), m.height-2)
 	}
 	m.screen = screenDayDetail
 	return m, nil
@@ -545,7 +545,7 @@ func (m pickerModel) loadEntryDetail(id string) (tea.Model, tea.Cmd) {
 	if vpHeight < 1 {
 		vpHeight = 1
 	}
-	m.viewport = viewport.New(m.width, vpHeight)
+	m.viewport = viewport.New(m.contentWidth(), vpHeight)
 	m.viewport.SetContent(m.formatEntry())
 	m.screen = screenEntryDetail
 	return m, nil
@@ -580,20 +580,49 @@ func (m *pickerModel) layoutToday() {
 
 	if m.dailyEntry != nil {
 		vpHeight := m.dailyViewportHeight()
-		m.dailyViewport.Width = m.width
+		m.dailyViewport.Width = m.contentWidth()
 		m.dailyViewport.Height = vpHeight
 		// Render markdown content as rich text
-		rendered := RenderMarkdown(m.dailyEntry.Content, m.width)
+		rendered := RenderMarkdown(m.dailyEntry.Content, m.contentWidth())
 		m.dailyViewport.SetContent(rendered)
 
 		listHeight := m.height - headerHeight - vpHeight - footerHeight - 1 // 1 for separator
 		if listHeight < 3 {
 			listHeight = 3
 		}
-		m.todayList.SetSize(m.width, listHeight)
+		m.todayList.SetSize(m.contentWidth(), listHeight)
 	} else {
-		m.todayList.SetSize(m.width, m.height-headerHeight-footerHeight)
+		m.todayList.SetSize(m.contentWidth(), m.height-headerHeight-footerHeight)
 	}
+}
+
+// contentWidth returns the effective content width, respecting MaxWidth configuration.
+func (m *pickerModel) contentWidth() int {
+	if m.cfg.MaxWidth > 0 && m.width > m.cfg.MaxWidth {
+		return m.cfg.MaxWidth
+	}
+	return m.width
+}
+
+// centerContent centers the given content string horizontally if width > MaxWidth.
+func (m *pickerModel) centerContent(content string) string {
+	if m.cfg.MaxWidth <= 0 || m.width <= m.cfg.MaxWidth {
+		return content
+	}
+
+	contentWidth := m.cfg.MaxWidth
+	leftPadding := (m.width - contentWidth) / 2
+
+	if leftPadding <= 0 {
+		return content
+	}
+
+	padding := strings.Repeat(" ", leftPadding)
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		lines[i] = padding + line
+	}
+	return strings.Join(lines, "\n")
 }
 
 type todayLoadedMsg struct {
@@ -658,7 +687,7 @@ func (m pickerModel) loadDateList() (tea.Model, tea.Cmd) {
 	m.dateList.Title = "Daily View"
 	m.dateList.SetShowHelp(false)
 	if m.ready {
-		m.dateList.SetSize(m.width, m.height-2)
+		m.dateList.SetSize(m.contentWidth(), m.height-2)
 	}
 	m.screen = screenDateList
 	return m, nil
@@ -666,7 +695,7 @@ func (m pickerModel) loadDateList() (tea.Model, tea.Cmd) {
 
 func (m pickerModel) View() string {
 	if !m.ready {
-		return "Loading..."
+		return m.centerContent("Loading...")
 	}
 	if m.helpActive {
 		return m.helpOverlay()
@@ -747,14 +776,14 @@ func (m pickerModel) View() string {
 	if m.deleteActive {
 		prompt := fmt.Sprintf("Delete entry %s? [y/N] ", m.deleteEntry.ID)
 		warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // red
-		return result + "\n" + warningStyle.Render(prompt)
+		return m.centerContent(result + "\n" + warningStyle.Render(prompt))
 	}
 
 	if m.jotActive {
-		return result + "\n" + m.jotInput.View()
+		return m.centerContent(result + "\n" + m.jotInput.View())
 	}
 
-	return result
+	return m.centerContent(result)
 }
 
 func (m pickerModel) helpOverlay() string {
@@ -787,7 +816,7 @@ func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
 	ta.Placeholder = "jot (^J=newline ↵=submit)..."
 	ta.Focus()
 	ta.CharLimit = maxJotInputLength
-	ta.SetWidth(m.width - 4)
+	ta.SetWidth(m.contentWidth() - 4)
 	// Dynamic height: use 25% of screen height or max 5 lines
 	height := m.height / 4
 	if height > 5 {
@@ -940,7 +969,7 @@ func (m pickerModel) updateContextPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		ti.Placeholder = "context name..."
 		ti.Focus()
 		ti.CharLimit = maxContextNameLength
-		ti.Width = m.width - 8
+		ti.Width = m.contentWidth() - 8
 		m.contextInput = ti
 		m.contextCreating = true
 		return m, textinput.Blink
@@ -1162,6 +1191,7 @@ func (m pickerModel) startEdit(e entry.Entry) (tea.Model, tea.Cmd) {
 type TUIConfig struct {
 	Editor          string // resolved editor command
 	DefaultTemplate string // default template name
+	MaxWidth        int    // maximum viewport width (0 = no limit)
 }
 
 // newTUIModel creates a new TUI model starting at the today screen.

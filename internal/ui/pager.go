@@ -18,6 +18,9 @@ type pagerModel struct {
 	viewport viewport.Model
 	content  string
 	ready    bool
+	maxWidth int // maximum viewport width (0 = no limit)
+	width    int // terminal width
+	height   int // terminal height
 }
 
 func (m pagerModel) Init() tea.Cmd {
@@ -32,12 +35,14 @@ func (m pagerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
 		if !m.ready {
-			m.viewport = viewport.New(msg.Width, msg.Height-1)
+			m.viewport = viewport.New(m.contentWidth(), msg.Height-1)
 			m.viewport.SetContent(m.content)
 			m.ready = true
 		} else {
-			m.viewport.Width = msg.Width
+			m.viewport.Width = m.contentWidth()
 			m.viewport.Height = msg.Height - 1
 			m.viewport.SetContent(m.content)
 		}
@@ -48,17 +53,52 @@ func (m pagerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// contentWidth returns the effective content width, respecting maxWidth configuration.
+func (m *pagerModel) contentWidth() int {
+	if m.maxWidth > 0 && m.width > m.maxWidth {
+		return m.maxWidth
+	}
+	return m.width
+}
+
+// centerContent centers the given content string horizontally if width > maxWidth.
+func (m *pagerModel) centerContent(content string) string {
+	if m.maxWidth <= 0 || m.width <= m.maxWidth {
+		return content
+	}
+
+	contentWidth := m.maxWidth
+	leftPadding := (m.width - contentWidth) / 2
+
+	if leftPadding <= 0 {
+		return content
+	}
+
+	padding := strings.Repeat(" ", leftPadding)
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		lines[i] = padding + line
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (m pagerModel) View() string {
 	if !m.ready {
-		return "Loading..."
+		return m.centerContent("Loading...")
 	}
 	footer := helpStyle.Render("↑/↓ scroll • q quit")
-	return m.viewport.View() + "\n" + footer
+	return m.centerContent(m.viewport.View() + "\n" + footer)
 }
 
 // PageOutput displays content through a Bubble Tea pager when running in a TTY
 // and the content exceeds terminal height. Otherwise writes directly to stdout.
+// Uses a default max width of 100 characters.
 func PageOutput(content string) error {
+	return PageOutputWithMaxWidth(content, 100)
+}
+
+// PageOutputWithMaxWidth displays content with a custom max width constraint.
+func PageOutputWithMaxWidth(content string, maxWidth int) error {
 	// If not a TTY, write directly
 	if !term.IsTerminal(int(os.Stdout.Fd())) {
 		fmt.Print(content)
@@ -79,7 +119,7 @@ func PageOutput(content string) error {
 	}
 
 	// Use Bubble Tea pager
-	p := tea.NewProgram(pagerModel{content: content}, tea.WithAltScreen())
+	p := tea.NewProgram(pagerModel{content: content, maxWidth: maxWidth}, tea.WithAltScreen())
 	_, err = p.Run()
 	return err
 }
