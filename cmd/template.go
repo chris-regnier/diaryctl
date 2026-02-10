@@ -178,7 +178,7 @@ var templateEditCmd = &cobra.Command{
 			return nil
 		}
 
-		updated, err := store.UpdateTemplate(tmpl.ID, tmpl.Name, content)
+		updated, err := store.UpdateTemplate(tmpl.ID, tmpl.Name, content, nil)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error:", err)
 			os.Exit(2)
