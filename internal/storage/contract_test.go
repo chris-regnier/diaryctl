@@ -622,7 +622,7 @@ func runTemplateContractTests(t *testing.T, name string, factory storageFactory)
 			s := factory(t)
 			tmpl := makeTemplate(t, "daily", "old content")
 			_ = s.CreateTemplate(tmpl)
-			updated, err := s.UpdateTemplate(tmpl.ID, "daily-v2", "new content")
+			updated, err := s.UpdateTemplate(tmpl.ID, "daily-v2", "new content", nil)
 			if err != nil {
 				t.Fatalf("UpdateTemplate: %v", err)
 			}
@@ -633,7 +633,7 @@ func runTemplateContractTests(t *testing.T, name string, factory storageFactory)
 
 		t.Run("UpdateTemplate not found", func(t *testing.T) {
 			s := factory(t)
-			_, err := s.UpdateTemplate("nonexist", "name", "content")
+			_, err := s.UpdateTemplate("nonexist", "name", "content", nil)
 			if !errors.Is(err, storage.ErrNotFound) {
 				t.Errorf("expected ErrNotFound, got %v", err)
 			}

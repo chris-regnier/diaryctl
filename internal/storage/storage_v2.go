@@ -10,6 +10,11 @@ import (
 // StorageV2 defines the interface for day/block-based diary persistence.
 // This is the V2 storage interface that operates on days and blocks instead
 // of entries, providing a more structured approach to diary management.
+//
+// Date Normalization Contract:
+// All implementations MUST normalize date parameters to midnight local time
+// using day.NormalizeDate() before persisting or comparing dates. This ensures
+// consistent day boundaries across all storage operations.
 type StorageV2 interface {
 	// Day methods
 
@@ -29,20 +34,24 @@ type StorageV2 interface {
 
 	// CreateBlock creates a new block for the given date.
 	// The date will be normalized to midnight local time.
-	// The block's ID, CreatedAt, and UpdatedAt timestamps should be set by the caller.
+	// The block's ID, CreatedAt, and UpdatedAt timestamps MUST be set by the caller.
+	// Implementations SHOULD validate these fields and return ErrValidation if they are missing or invalid.
 	CreateBlock(date time.Time, block block.Block) error
 
 	// GetBlock returns a block by ID along with the date it belongs to.
 	// Returns ErrNotFound if the block doesn't exist.
+	// Returns ErrValidation if blockID is empty.
 	GetBlock(blockID string) (block.Block, time.Time, error)
 
 	// UpdateBlock updates the content and attributes of a block.
 	// The block's UpdatedAt timestamp will be updated automatically.
 	// Returns ErrNotFound if the block doesn't exist.
+	// Returns ErrValidation if blockID is empty or content is invalid.
 	UpdateBlock(blockID string, content string, attributes map[string]string) error
 
 	// DeleteBlock deletes a block by ID.
 	// Returns ErrNotFound if the block doesn't exist.
+	// Returns ErrValidation if blockID is empty.
 	DeleteBlock(blockID string) error
 
 	// ListBlocks returns all blocks for the given date, ordered by CreatedAt ascending.
@@ -56,15 +65,18 @@ type StorageV2 interface {
 	// Template methods
 
 	// CreateTemplate creates a new template with attributes.
-	// The template's ID, CreatedAt, and UpdatedAt timestamps should be set by the caller.
+	// The template's ID, CreatedAt, and UpdatedAt timestamps MUST be set by the caller.
+	// Implementations SHOULD validate these fields and return ErrValidation if they are missing or invalid.
 	CreateTemplate(t Template) error
 
 	// GetTemplate returns a template by ID.
 	// Returns ErrNotFound if the template doesn't exist.
+	// Returns ErrValidation if id is empty.
 	GetTemplate(id string) (Template, error)
 
 	// GetTemplateByName returns a template by name.
 	// Returns ErrNotFound if the template doesn't exist.
+	// Returns ErrValidation if name is empty.
 	GetTemplateByName(name string) (Template, error)
 
 	// ListTemplates returns all templates ordered by name ascending.
@@ -73,10 +85,12 @@ type StorageV2 interface {
 	// UpdateTemplate updates a template's name, content, and attributes.
 	// The template's UpdatedAt timestamp will be updated automatically.
 	// Returns the updated template or ErrNotFound if the template doesn't exist.
+	// Returns ErrValidation if id or name is empty.
 	UpdateTemplate(id string, name string, content string, attributes map[string]string) (Template, error)
 
 	// DeleteTemplate deletes a template by ID.
 	// Returns ErrNotFound if the template doesn't exist.
+	// Returns ErrValidation if id is empty.
 	DeleteTemplate(id string) error
 
 	// Lifecycle methods

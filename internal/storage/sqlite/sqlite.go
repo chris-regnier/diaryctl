@@ -497,8 +497,9 @@ func (s *Store) ListTemplates() ([]storage.Template, error) {
 	return templates, rows.Err()
 }
 
-// UpdateTemplate modifies an existing template's name and content.
-func (s *Store) UpdateTemplate(id string, name string, content string) (storage.Template, error) {
+// UpdateTemplate modifies an existing template's name, content, and attributes.
+// Note: V1 sqlite schema does not support attributes, so the attributes parameter is ignored.
+func (s *Store) UpdateTemplate(id string, name string, content string, attributes map[string]string) (storage.Template, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	tx, err := s.db.Begin()

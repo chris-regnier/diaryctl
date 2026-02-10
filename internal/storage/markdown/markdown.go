@@ -588,8 +588,8 @@ func (s *Store) ListTemplates() ([]storage.Template, error) {
 	return templates, nil
 }
 
-// UpdateTemplate modifies an existing template's name and content.
-func (s *Store) UpdateTemplate(id string, name string, content string) (storage.Template, error) {
+// UpdateTemplate modifies an existing template's name, content, and attributes.
+func (s *Store) UpdateTemplate(id string, name string, content string, attributes map[string]string) (storage.Template, error) {
 	// Find existing template by ID
 	existing, err := s.GetTemplate(id)
 	if err != nil {
@@ -599,6 +599,7 @@ func (s *Store) UpdateTemplate(id string, name string, content string) (storage.
 	updated := existing
 	updated.Name = name
 	updated.Content = content
+	updated.Attributes = attributes
 	updated.UpdatedAt = time.Now().UTC()
 
 	// If name changed, remove old file
