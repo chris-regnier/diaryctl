@@ -107,6 +107,7 @@ func NewRootV2Command(store storage.StorageV2) *cobra.Command {
 
 	// Add v2 commands
 	cmd.AddCommand(NewJotV2Command(store))
+	cmd.AddCommand(NewEditV2Command(store))
 
 	return cmd
 }
