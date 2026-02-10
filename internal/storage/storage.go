@@ -43,11 +43,12 @@ type ListDaysOptions struct {
 
 // Template represents a reusable content template.
 type Template struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Content    string            `json:"content"`
+	Attributes map[string]string `json:"attributes,omitempty"` // Default attributes for generated blocks
+	CreatedAt  time.Time         `json:"created_at"`
+	UpdatedAt  time.Time         `json:"updated_at"`
 }
 
 // Context represents a semantic grouping for diary entries.
