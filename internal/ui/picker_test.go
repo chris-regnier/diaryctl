@@ -145,6 +145,15 @@ func (m *mockStorage) DetachContext(entryID string, contextID string) error {
 	return nil
 }
 
+// Template methods
+func (m *mockStorage) ListTemplates() ([]storage.Template, error) {
+	return nil, nil // Return empty list by default
+}
+
+func (m *mockStorage) GetTemplateByName(name string) (storage.Template, error) {
+	return storage.Template{}, storage.ErrNotFound
+}
+
 func makeTestDays() (*mockStorage, []storage.DaySummary) {
 	jan10 := time.Date(2026, 1, 10, 0, 0, 0, 0, time.Local)
 	jan12 := time.Date(2026, 1, 12, 0, 0, 0, 0, time.Local)
@@ -1071,6 +1080,7 @@ func TestContextPanelCreate(t *testing.T) {
 		t.Error("Context 'newcontext' was not auto-attached to entry")
 	}
 }
+
 // TestJotMultiline verifies that Ctrl+J inserts newlines and Enter submits
 func TestJotMultiline(t *testing.T) {
 	now := time.Now()

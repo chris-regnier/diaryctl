@@ -16,6 +16,7 @@ import (
 	"github.com/chris-regnier/diaryctl/internal/editor"
 	"github.com/chris-regnier/diaryctl/internal/entry"
 	"github.com/chris-regnier/diaryctl/internal/storage"
+	"github.com/chris-regnier/diaryctl/internal/template"
 )
 
 // pickerScreen represents the current screen state.
@@ -58,6 +59,10 @@ type StorageProvider interface {
 	CreateContext(c storage.Context) error
 	AttachContext(entryID string, contextID string) error
 	DetachContext(entryID string, contextID string) error
+
+	// Template
+	ListTemplates() ([]storage.Template, error)
+	GetTemplateByName(name string) (storage.Template, error)
 }
 
 // dateItem implements list.Item for DaySummary.
@@ -105,6 +110,35 @@ func (c contextItem) Title() string {
 func (c contextItem) Description() string { return c.ctx.Source }
 func (c contextItem) FilterValue() string { return c.ctx.Name }
 
+// templateItem implements list.Item for storage.Template.
+type templateItem struct {
+	tmpl     storage.Template
+	selected bool
+}
+
+func (t templateItem) Title() string {
+	marker := "○"
+	if t.selected {
+		marker = "●"
+	}
+	return fmt.Sprintf("%s %s", marker, t.tmpl.Name)
+}
+
+func (t templateItem) Description() string {
+	lines := strings.SplitN(t.tmpl.Content, "\n", 2)
+	preview := lines[0]
+	if len(preview) > 60 {
+		preview = preview[:57] + "..."
+	}
+	return preview
+}
+
+func (t templateItem) FilterValue() string { return t.tmpl.Name }
+
+// templateCallbackFunc is called after template picker selection.
+// names is nil if cancelled, empty slice if skipped, or selected template names.
+type templateCallbackFunc func(m *pickerModel, names []string) tea.Cmd
+
 // pickerModel is the main Bubble Tea model for the daily picker.
 type pickerModel struct {
 	store  StorageProvider
@@ -139,6 +173,13 @@ type pickerModel struct {
 	contextCreating bool
 	// Help overlay
 	helpActive bool
+	// Template picker
+	templateList         list.Model
+	templatePickerActive bool
+	templateSelected     map[string]bool    // name -> selected
+	templateItems        []storage.Template // cached templates
+	templateCallback     templateCallbackFunc
+	templateTargetEntry  *entry.Entry // entry being edited with template append
 	// Common
 	width  int
 	height int
@@ -262,6 +303,40 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenContextPanel
 		return m, nil
 
+	case templatesLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, tea.Quit
+		}
+		if len(msg.templates) == 0 {
+			// No templates available, proceed without
+			if m.templateCallback != nil {
+				cmd := m.templateCallback(&m, nil)
+				m.templateCallback = nil
+				return m, cmd
+			}
+			return m, nil
+		}
+		m.templateItems = msg.templates
+		m.templateSelected = make(map[string]bool)
+
+		items := make([]list.Item, len(msg.templates))
+		for i, t := range msg.templates {
+			items[i] = templateItem{tmpl: t, selected: false}
+		}
+
+		m.templateList = list.New(items, list.NewDefaultDelegate(), m.contentWidth()-4, m.height/2)
+		m.templateList.Title = "Select Template(s)"
+		m.templateList.SetShowHelp(false)
+		m.templatePickerActive = true
+		return m, nil
+
+	case openEditorForCreateMsg:
+		return m.doCreateWithEditor(msg.content, msg.refs)
+
+	case openEditorForEditMsg:
+		return m.doEditWithEditor(msg.entryID, msg.content, msg.refs)
+
 	case todayLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -321,6 +396,11 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Swallow all other keys while help is shown
 			return m, nil
+		}
+
+		// Template picker mode — intercept all keys
+		if m.templatePickerActive {
+			return m.updateTemplatePicker(msg)
 		}
 
 		// Jot input mode — intercept all keys
@@ -398,6 +478,22 @@ func (m pickerModel) updateToday(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case "t", "T":
+		// Append template to selected entry
+		var targetEntry *entry.Entry
+		if m.todayFocus == focusDailyViewport && m.dailyEntry != nil {
+			targetEntry = m.dailyEntry
+		} else if m.todayFocus == focusEntryList {
+			if item, ok := m.todayList.SelectedItem().(entryItem); ok {
+				e := item.entry
+				targetEntry = &e
+			}
+		}
+		if targetEntry != nil {
+			m.templateTargetEntry = targetEntry
+			return m.openTemplatePicker(appendTemplatesCallback)
+		}
+		return m, nil
 	}
 
 	// Pass to focused component
@@ -459,6 +555,12 @@ func (m pickerModel) updateDayDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.deleteEntry = item.entry
 			return m, nil
 		}
+	case "t", "T":
+		if item, ok := m.dayList.SelectedItem().(entryItem); ok {
+			e := item.entry
+			m.templateTargetEntry = &e
+			return m.openTemplatePicker(appendTemplatesCallback)
+		}
 	case "left", "p":
 		// Navigate to previous (earlier) day
 		if m.dayIdx < len(m.days)-1 {
@@ -496,6 +598,9 @@ func (m pickerModel) updateEntryDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.deleteActive = true
 		m.deleteEntry = m.entry
 		return m, nil
+	case "t", "T":
+		m.templateTargetEntry = &m.entry
+		return m.openTemplatePicker(appendTemplatesCallback)
 	}
 
 	var cmd tea.Cmd
@@ -653,6 +758,22 @@ type contextCreatedMsg struct {
 	err error
 }
 
+type templatesLoadedMsg struct {
+	templates []storage.Template
+	err       error
+}
+
+type openEditorForCreateMsg struct {
+	content string
+	refs    []entry.TemplateRef
+}
+
+type openEditorForEditMsg struct {
+	entryID string
+	content string
+	refs    []entry.TemplateRef
+}
+
 func (m pickerModel) loadTodayCmd() tea.Msg {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
@@ -699,6 +820,10 @@ func (m pickerModel) View() string {
 	}
 	if m.helpActive {
 		return m.helpOverlay()
+	}
+	if m.templatePickerActive {
+		picker := m.templatePickerView()
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, picker)
 	}
 
 	var result string
@@ -801,8 +926,9 @@ func (m pickerModel) helpOverlay() string {
 
 Actions
   j          jot a note (^J for newline)
-  c          create new entry
+  c          create new entry (with templates)
   e          edit selected entry
+  t          append template to entry
   d          delete selected entry
   /          search / filter
   x          context panel
@@ -1027,6 +1153,262 @@ func (m pickerModel) updateContextCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// --- Template Picker Methods ---
+
+func (m pickerModel) loadTemplatesCmd() tea.Msg {
+	templates, err := m.store.ListTemplates()
+	if err != nil {
+		return templatesLoadedMsg{err: err}
+	}
+	return templatesLoadedMsg{templates: templates}
+}
+
+func (m pickerModel) openTemplatePicker(callback templateCallbackFunc) (tea.Model, tea.Cmd) {
+	m.templateCallback = callback
+	return m, m.loadTemplatesCmd
+}
+
+func (m pickerModel) updateTemplatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.templatePickerActive = false
+		if m.templateCallback != nil {
+			cmd := m.templateCallback(&m, nil)
+			m.templateCallback = nil
+			return m, cmd
+		}
+		return m, nil
+
+	case " ":
+		// Toggle selection
+		if item, ok := m.templateList.SelectedItem().(templateItem); ok {
+			name := item.tmpl.Name
+			m.templateSelected[name] = !m.templateSelected[name]
+			// Refresh list items
+			items := make([]list.Item, len(m.templateItems))
+			for i, t := range m.templateItems {
+				items[i] = templateItem{tmpl: t, selected: m.templateSelected[t.Name]}
+			}
+			m.templateList.SetItems(items)
+		}
+		return m, nil
+
+	case "enter":
+		m.templatePickerActive = false
+		// Collect selected names in order
+		var names []string
+		for _, t := range m.templateItems {
+			if m.templateSelected[t.Name] {
+				names = append(names, t.Name)
+			}
+		}
+		if m.templateCallback != nil {
+			cmd := m.templateCallback(&m, names)
+			m.templateCallback = nil
+			return m, cmd
+		}
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.templateList, cmd = m.templateList.Update(msg)
+	return m, cmd
+}
+
+func (m pickerModel) templatePickerView() string {
+	// Rebuild items with current selection state
+	items := make([]list.Item, len(m.templateItems))
+	for i, t := range m.templateItems {
+		items[i] = templateItem{tmpl: t, selected: m.templateSelected[t.Name]}
+	}
+	m.templateList.SetItems(items)
+
+	var b strings.Builder
+	b.WriteString(m.templateList.View())
+	b.WriteString("\n")
+	b.WriteString(helpStyle.Render("space toggle  enter confirm  esc skip"))
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Padding(1).
+		Render(b.String())
+}
+
+// createWithTemplatesCallback is called after template selection for create action.
+func createWithTemplatesCallback(m *pickerModel, names []string) tea.Cmd {
+	return func() tea.Msg {
+		var content string
+		var refs []entry.TemplateRef
+
+		if len(names) > 0 {
+			c, r, err := template.Compose(m.store, names)
+			if err != nil {
+				return editorFinishedMsg{err: err}
+			}
+			content = c
+			refs = r
+		}
+
+		return openEditorForCreateMsg{content: content, refs: refs}
+	}
+}
+
+// appendTemplatesCallback is called after template selection for append action.
+func appendTemplatesCallback(m *pickerModel, names []string) tea.Cmd {
+	if len(names) == 0 || m.templateTargetEntry == nil {
+		return nil
+	}
+
+	return func() tea.Msg {
+		c, refs, err := template.Compose(m.store, names)
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+
+		// Append to existing content
+		newContent := m.templateTargetEntry.Content
+		if newContent != "" && !strings.HasSuffix(newContent, "\n") {
+			newContent += "\n"
+		}
+		newContent += "\n" + c
+
+		// Merge refs (deduplicate by ID)
+		existingRefs := make(map[string]bool)
+		for _, r := range m.templateTargetEntry.Templates {
+			existingRefs[r.TemplateID] = true
+		}
+		mergedRefs := append([]entry.TemplateRef{}, m.templateTargetEntry.Templates...)
+		for _, r := range refs {
+			if !existingRefs[r.TemplateID] {
+				mergedRefs = append(mergedRefs, r)
+			}
+		}
+
+		return openEditorForEditMsg{
+			entryID: m.templateTargetEntry.ID,
+			content: newContent,
+			refs:    mergedRefs,
+		}
+	}
+}
+
+func (m pickerModel) doCreateWithEditor(initialContent string, refs []entry.TemplateRef) (tea.Model, tea.Cmd) {
+	editorCmd := editor.ResolveEditor(m.cfg.Editor)
+	parts := strings.Fields(editorCmd)
+	if len(parts) == 0 {
+		return m, nil
+	}
+
+	tmpFile, err := os.CreateTemp("", "diaryctl-*.md")
+	if err != nil {
+		m.err = err
+		return m, tea.Quit
+	}
+	tmpName := tmpFile.Name()
+
+	if initialContent != "" {
+		if _, err := tmpFile.WriteString(initialContent); err != nil {
+			tmpFile.Close()
+			os.Remove(tmpName)
+			m.err = fmt.Errorf("failed to write to temp file: %w", err)
+			return m, tea.Quit
+		}
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpName)
+		m.err = fmt.Errorf("failed to prepare temp file: %w", err)
+		return m, tea.Quit
+	}
+
+	cmdArgs := append(parts[1:], tmpName)
+	c := exec.Command(parts[0], cmdArgs...)
+	templateRefs := refs
+
+	return m, tea.ExecProcess(c, func(err error) tea.Msg {
+		defer os.Remove(tmpName)
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		data, err := os.ReadFile(tmpName)
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		content := strings.TrimSpace(string(data))
+		if content == "" {
+			return editorFinishedMsg{} // no-op
+		}
+		id, err := entry.NewID()
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		now := time.Now().UTC()
+		e := entry.Entry{
+			ID:        id,
+			Content:   content,
+			CreatedAt: now,
+			UpdatedAt: now,
+			Templates: templateRefs,
+		}
+		if err := m.store.Create(e); err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		return editorFinishedMsg{}
+	})
+}
+
+func (m pickerModel) doEditWithEditor(entryID string, content string, refs []entry.TemplateRef) (tea.Model, tea.Cmd) {
+	editorCmd := editor.ResolveEditor(m.cfg.Editor)
+	parts := strings.Fields(editorCmd)
+	if len(parts) == 0 {
+		return m, nil
+	}
+
+	tmpFile, err := os.CreateTemp("", "diaryctl-*.md")
+	if err != nil {
+		m.err = err
+		return m, tea.Quit
+	}
+	tmpName := tmpFile.Name()
+
+	if _, err := tmpFile.WriteString(content); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpName)
+		m.err = fmt.Errorf("failed to write to temp file: %w", err)
+		return m, tea.Quit
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpName)
+		m.err = fmt.Errorf("failed to prepare temp file: %w", err)
+		return m, tea.Quit
+	}
+
+	cmdArgs := append(parts[1:], tmpName)
+	c := exec.Command(parts[0], cmdArgs...)
+	originalContent := content
+	templateRefs := refs
+
+	return m, tea.ExecProcess(c, func(err error) tea.Msg {
+		defer os.Remove(tmpName)
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		data, err := os.ReadFile(tmpName)
+		if err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		newContent := strings.TrimSpace(string(data))
+		if newContent == "" || newContent == strings.TrimSpace(originalContent) {
+			return editorFinishedMsg{} // no change
+		}
+		if _, err := m.store.Update(entryID, newContent, templateRefs); err != nil {
+			return editorFinishedMsg{err: err}
+		}
+		return editorFinishedMsg{}
+	})
+}
+
 func (m pickerModel) doJot(content string) tea.Msg {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
@@ -1061,10 +1443,17 @@ func (m pickerModel) doJot(content string) tea.Msg {
 		}
 		nowUTC := now.UTC()
 
-		// Use default template if configured
+		// Use default template if configured - look up full TemplateRef
 		var templateRefs []entry.TemplateRef
 		if m.cfg.DefaultTemplate != "" {
-			templateRefs = []entry.TemplateRef{{TemplateName: m.cfg.DefaultTemplate}}
+			names := template.ParseNames(m.cfg.DefaultTemplate)
+			_, refs, err := template.Compose(m.store, names)
+			if err != nil {
+				// Warn but continue - match CLI behavior (can't print to stderr in tea.Msg)
+				// Just proceed without template refs
+			} else {
+				templateRefs = refs
+			}
 		}
 
 		e := entry.Entry{
@@ -1083,56 +1472,8 @@ func (m pickerModel) doJot(content string) tea.Msg {
 }
 
 func (m pickerModel) startCreate() (tea.Model, tea.Cmd) {
-	editorCmd := editor.ResolveEditor(m.cfg.Editor)
-	parts := strings.Fields(editorCmd)
-	if len(parts) == 0 {
-		return m, nil
-	}
-
-	// Create temp file
-	tmpFile, err := os.CreateTemp("", "diaryctl-*.md")
-	if err != nil {
-		m.err = err
-		return m, tea.Quit
-	}
-	tmpName := tmpFile.Name()
-	if err := tmpFile.Close(); err != nil {
-		os.Remove(tmpName)
-		m.err = fmt.Errorf("failed to prepare temp file: %w", err)
-		return m, tea.Quit
-	}
-
-	cmdArgs := append(parts[1:], tmpName)
-	c := exec.Command(parts[0], cmdArgs...)
-	return m, tea.ExecProcess(c, func(err error) tea.Msg {
-		defer os.Remove(tmpName)
-		if err != nil {
-			return editorFinishedMsg{err: err}
-		}
-		data, err := os.ReadFile(tmpName)
-		if err != nil {
-			return editorFinishedMsg{err: err}
-		}
-		content := strings.TrimSpace(string(data))
-		if content == "" {
-			return editorFinishedMsg{} // no-op
-		}
-		id, err := entry.NewID()
-		if err != nil {
-			return editorFinishedMsg{err: err}
-		}
-		now := time.Now().UTC()
-		e := entry.Entry{
-			ID:        id,
-			Content:   content,
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-		if err := m.store.Create(e); err != nil {
-			return editorFinishedMsg{err: err}
-		}
-		return editorFinishedMsg{}
-	})
+	// Open template picker for create flow
+	return m.openTemplatePicker(createWithTemplatesCallback)
 }
 
 func (m pickerModel) startEdit(e entry.Entry) (tea.Model, tea.Cmd) {
