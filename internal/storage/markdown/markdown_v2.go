@@ -136,9 +136,9 @@ func (m *MarkdownV2) GetDay(date time.Time) (day.Day, error) {
 
 // ListDays returns a list of day summaries matching the filter criteria.
 // Days are returned in descending order by date (most recent first).
-// Stub for now - to be implemented in a later task.
+// TODO: Implement ListDays - scan days directory, filter by opts, return summaries
 func (m *MarkdownV2) ListDays(opts storage.ListDaysOptions) ([]storage.DaySummary, error) {
-	// Stub for now
+	// TODO: Implement ListDays functionality
 	return []storage.DaySummary{}, nil
 }
 
@@ -327,9 +327,9 @@ func (m *MarkdownV2) ListBlocks(date time.Time) ([]block.Block, error) {
 
 // SearchBlocks searches for blocks matching the given criteria.
 // Results are ordered by date descending, then by CreatedAt descending.
-// Stub for now - to be implemented in a later task.
+// TODO: Implement SearchBlocks - scan days, filter by attributes/content/date, return results
 func (m *MarkdownV2) SearchBlocks(opts storage.SearchOptions) ([]storage.BlockResult, error) {
-	// Stub for now
+	// TODO: Implement SearchBlocks functionality
 	return []storage.BlockResult{}, nil
 }
 
