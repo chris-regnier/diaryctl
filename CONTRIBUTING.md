@@ -188,6 +188,14 @@ type Storage interface {
 
 ## Areas for Contribution
 
+### Feature Roadmap
+
+See [docs/roadmap.md](docs/roadmap.md) for a comprehensive feature roadmap organized by theme and priority. This document tracks:
+
+- **Implemented features** — What's already built
+- **Designed features** — Specs complete, ready for implementation
+- **Proposed features** — Ideas for future development
+
 ### Good First Issues
 
 Look for issues tagged `good-first-issue`:
@@ -203,6 +211,8 @@ Look for issues tagged `good-first-issue`:
 - Export/import functionality
 - Search improvements
 - CLI enhancements
+
+See the [Feature Roadmap](docs/roadmap.md) for detailed feature specifications and design documents.
 
 ## Questions?
 
