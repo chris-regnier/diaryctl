@@ -60,6 +60,18 @@ func TestResolveThemeUnknownPresetFallsBack(t *testing.T) {
 	}
 }
 
+func TestTUIConfigIncludesTheme(t *testing.T) {
+	cfg := TUIConfig{
+		Editor:          "vim",
+		DefaultTemplate: "daily",
+		MaxWidth:        100,
+		Theme:           ResolveTheme(config.ThemeConfig{Preset: "dracula"}),
+	}
+	if cfg.Theme.MarkdownStyle != "dark" {
+		t.Errorf("expected dracula markdown_style 'dark', got %q", cfg.Theme.MarkdownStyle)
+	}
+}
+
 func TestThemeStyleMethods(t *testing.T) {
 	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
 

@@ -1533,6 +1533,7 @@ type TUIConfig struct {
 	Editor          string // resolved editor command
 	DefaultTemplate string // default template name
 	MaxWidth        int    // maximum viewport width (0 = no limit)
+	Theme           Theme  // resolved theme
 }
 
 // newTUIModel creates a new TUI model starting at the today screen.

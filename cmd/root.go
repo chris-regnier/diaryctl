@@ -66,6 +66,7 @@ var rootCmd = &cobra.Command{
 			Editor:          editor.ResolveEditor(appConfig.Editor),
 			DefaultTemplate: appConfig.DefaultTemplate,
 			MaxWidth:        appConfig.MaxWidth,
+			Theme:           ui.ResolveTheme(appConfig.Theme),
 		})
 	},
 }
