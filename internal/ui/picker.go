@@ -356,7 +356,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.daily != nil {
 			m.dailyViewport = viewport.New(m.contentWidth(), m.dailyViewportHeight())
 			// Render markdown content as rich text
-			rendered := RenderMarkdown(msg.daily.Content, m.contentWidth())
+			rendered := RenderMarkdownWithStyle(msg.daily.Content, m.contentWidth(), m.cfg.Theme.MarkdownStyle)
 			m.dailyViewport.SetContent(rendered)
 		}
 		if m.ready {
@@ -664,7 +664,7 @@ func (m pickerModel) formatEntry() string {
 	fmt.Fprintln(&b)
 
 	// Render markdown content as rich text
-	rendered := RenderMarkdown(m.entry.Content, m.viewport.Width)
+	rendered := RenderMarkdownWithStyle(m.entry.Content, m.viewport.Width, m.cfg.Theme.MarkdownStyle)
 	fmt.Fprintln(&b, rendered)
 	return b.String()
 }
@@ -688,7 +688,7 @@ func (m *pickerModel) layoutToday() {
 		m.dailyViewport.Width = m.contentWidth()
 		m.dailyViewport.Height = vpHeight
 		// Render markdown content as rich text
-		rendered := RenderMarkdown(m.dailyEntry.Content, m.contentWidth())
+		rendered := RenderMarkdownWithStyle(m.dailyEntry.Content, m.contentWidth(), m.cfg.Theme.MarkdownStyle)
 		m.dailyViewport.SetContent(rendered)
 
 		listHeight := m.height - headerHeight - vpHeight - footerHeight - 1 // 1 for separator
@@ -832,10 +832,10 @@ func (m pickerModel) View() string {
 	case screenToday:
 		if m.dailyEntry == nil && len(m.todayEntries) == 0 {
 			// Empty state
-			header := lipgloss.NewStyle().Bold(true).Render(
+			header := m.cfg.Theme.HeaderStyle().Render(
 				fmt.Sprintf("Today — %s", time.Now().Format("2006-01-02")))
 			empty := "\nNothing yet today.\n\n  j  jot a quick note\n  c  create a new entry\n"
-			footer := helpStyle.Render("j jot  c create  b browse  x ctx  ? help")
+			footer := m.cfg.Theme.HelpStyle().Render("j jot  c create  b browse  x ctx  ? help")
 			result = header + empty + "\n" + footer
 		} else {
 			var sections []string
@@ -849,7 +849,7 @@ func (m pickerModel) View() string {
 			if count == 1 {
 				label = "entry"
 			}
-			header := lipgloss.NewStyle().Bold(true).Render(
+			header := m.cfg.Theme.HeaderStyle().Render(
 				fmt.Sprintf("Today — %s    %d %s", time.Now().Format("2006-01-02"), count, label))
 			sections = append(sections, header)
 
@@ -864,23 +864,23 @@ func (m pickerModel) View() string {
 			}
 
 			// Footer
-			footer := helpStyle.Render("j jot  c create  e edit  b browse  x ctx  ? help")
+			footer := m.cfg.Theme.HelpStyle().Render("j jot  c create  e edit  b browse  x ctx  ? help")
 			sections = append(sections, footer)
 
 			result = strings.Join(sections, "\n")
 		}
 	case screenDateList:
-		footer := helpStyle.Render("↑/↓ navigate • enter select • q quit")
+		footer := m.cfg.Theme.HelpStyle().Render("↑/↓ navigate • enter select • q quit")
 		result = m.dateList.View() + "\n" + footer
 	case screenDayDetail:
-		footer := helpStyle.Render("↑/↓ navigate • enter select • ←/p prev day • →/n next day • esc back • q quit")
+		footer := m.cfg.Theme.HelpStyle().Render("↑/↓ navigate • enter select • ←/p prev day • →/n next day • esc back • q quit")
 		result = m.dayList.View() + "\n" + footer
 	case screenEntryDetail:
-		header := lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("Entry: %s", m.entry.ID))
-		meta := helpStyle.Render(fmt.Sprintf("Created: %s  Modified: %s",
+		header := m.cfg.Theme.HeaderStyle().Render(fmt.Sprintf("Entry: %s", m.entry.ID))
+		meta := m.cfg.Theme.HelpStyle().Render(fmt.Sprintf("Created: %s  Modified: %s",
 			m.entry.CreatedAt.Local().Format("2006-01-02 15:04"),
 			m.entry.UpdatedAt.Local().Format("2006-01-02 15:04")))
-		footer := helpStyle.Render("↑/↓ scroll • esc back • q quit")
+		footer := m.cfg.Theme.HelpStyle().Render("↑/↓ scroll • esc back • q quit")
 		result = header + "\n" + meta + "\n\n" + m.viewport.View() + "\n" + footer
 	case screenContextPanel:
 		var b strings.Builder
@@ -892,7 +892,7 @@ func (m pickerModel) View() string {
 			if m.contextEntryID == "" {
 				hint = "n new  / filter  esc close"
 			}
-			b.WriteString("\n" + helpStyle.Render(hint))
+			b.WriteString("\n" + m.cfg.Theme.HelpStyle().Render(hint))
 		}
 		result = b.String()
 	}
@@ -900,7 +900,7 @@ func (m pickerModel) View() string {
 	// At the end of View(), before returning:
 	if m.deleteActive {
 		prompt := fmt.Sprintf("Delete entry %s? [y/N] ", m.deleteEntry.ID)
-		warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // red
+		warningStyle := m.cfg.Theme.DangerStyle()
 		return m.centerContent(result + "\n" + warningStyle.Render(prompt))
 	}
 
@@ -912,8 +912,7 @@ func (m pickerModel) View() string {
 }
 
 func (m pickerModel) helpOverlay() string {
-	help := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+	help := m.cfg.Theme.BorderStyle().
 		Padding(1, 2).
 		Width(48).
 		Render(`Navigation
@@ -1226,10 +1225,9 @@ func (m pickerModel) templatePickerView() string {
 	var b strings.Builder
 	b.WriteString(m.templateList.View())
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("space toggle  enter confirm  esc skip"))
+	b.WriteString(m.cfg.Theme.HelpStyle().Render("space toggle  enter confirm  esc skip"))
 
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+	return m.cfg.Theme.BorderStyle().
 		Padding(1).
 		Render(b.String())
 }
