@@ -72,6 +72,42 @@ func TestTUIConfigIncludesTheme(t *testing.T) {
 	}
 }
 
+func TestResolveThemeAllPresets(t *testing.T) {
+	cases := []struct {
+		preset        string
+		markdownStyle string
+	}{
+		{"default-dark", "dark"},
+		{"default-light", "light"},
+		{"dracula", "dark"},
+		{"ayu-dark", "dark"},
+		{"ayu-light", "light"},
+		{"catppuccin-mocha", "dark"},
+		{"catppuccin-latte", "light"},
+		{"gruvbox-dark", "dark"},
+		{"gruvbox-light", "light"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.preset, func(t *testing.T) {
+			theme := ResolveTheme(config.ThemeConfig{Preset: tc.preset})
+
+			if string(theme.Primary) == "" {
+				t.Error("expected primary color to be set")
+			}
+			if string(theme.Accent) == "" {
+				t.Error("expected accent color to be set")
+			}
+			if string(theme.Danger) == "" {
+				t.Error("expected danger color to be set")
+			}
+			if theme.MarkdownStyle != tc.markdownStyle {
+				t.Errorf("expected markdown_style %q, got %q", tc.markdownStyle, theme.MarkdownStyle)
+			}
+		})
+	}
+}
+
 func TestThemeStyleMethods(t *testing.T) {
 	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
 
