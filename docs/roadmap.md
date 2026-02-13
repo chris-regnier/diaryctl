@@ -25,9 +25,11 @@ This document tracks the current state of diaryctl features, organized by theme 
 ### High-Priority Next Steps
 
 1. **Full-Text Search** — Documented in design docs but not implemented
-2. **Entry Linking** — `[[id]]` syntax for bidirectional references
-3. **Export/Import** — Data portability between storage backends
+2. **MCP Entry Creation** — `create_entry` and `list_templates` tools for AI assistants
+3. **Custom Themes** — Config-driven TUI colors and markdown rendering presets
 4. **Block-Based Data Model** — Complete design ready for implementation
+5. **Entry Linking** — `[[id]]` syntax for bidirectional references
+6. **Export/Import** — Data portability between storage backends
 
 ---
 
@@ -45,6 +47,7 @@ Features for organizing, finding, and connecting diary entries.
 | [Block-Based Model](features/block-based-model.md) | Designed | Day-centric atomic blocks architecture |
 | Entry Statistics | Proposed | Word count, streaks, usage analytics |
 | Recycle Bin/Undo | Proposed | Soft delete with restore capability |
+| [Media Attachments](features/media-attachments.md) | Proposed | Attach images/files to entries |
 
 ### 2. TUI Enhancements
 
@@ -54,6 +57,8 @@ Improvements to the interactive terminal interface.
 |---------|--------|-------|
 | [TUI Search/Filter](features/tui-search.md) | Designed | `/` key for live filtering per design doc |
 | [Guided Capture](features/guided-capture.md) | Designed | Template-driven prompt flows (`--guided` flag) |
+| [Custom Themes](features/custom-themes.md) | Designed | Config-driven TUI colors + markdown rendering presets |
+| [Entry Pinning](features/entry-pinning.md) | Proposed | Pin important entries to top of day view |
 | Reading Mode | Proposed | Distraction-free view with reading stats |
 | Context Browser | Proposed | Browse entries by context (git branch, tags) |
 | Draft Autosave | Proposed | Recovery from editor crashes |
@@ -67,7 +72,13 @@ Features for reducing friction and adding smart behaviors.
 |---------|--------|-------|
 | [Recurring Entries](features/recurring-entries.md) | Proposed | Auto-suggested templates at specific times |
 | [Git Hook Integration](features/git-hooks.md) | Proposed | Auto-jot on commits |
-| MCP Tool Expansion | Proposed | Create entries, get streaks via MCP |
+| [MCP Entry Creation](features/mcp-entry-creation.md) | Designed | `create_entry` + `list_templates` MCP tools |
+| [Weekly/Monthly Digest](features/weekly-digest.md) | Proposed | Summarize entries over configurable time periods |
+| [Mood Sentiment](features/mood-sentiment.md) | Proposed | Auto-detect mood, enable mood-over-time queries |
+| [Prompts of the Day](features/prompts-of-the-day.md) | Proposed | Rotating writing prompts in TUI and shell |
+| [Streaks & Achievements](features/streaks-achievements.md) | Proposed | Gamification with configurable milestones |
+| [Time Tracking Blocks](features/time-tracking.md) | Proposed | Start/stop timers, duration logging, reports |
+| [Webhook Notifications](features/webhook-notifications.md) | Proposed | Fire webhooks on diary events for external integrations |
 | Macro System | Proposed | User-defined command sequences |
 | Smart Templates | Proposed | Template suggestions based on context |
 
@@ -93,6 +104,7 @@ Features for data storage, backends, and scalability.
 | [SQLite Backend](features/sqlite-backend.md) | Implemented | SQLite/Turso compatible database storage |
 | PostgreSQL Backend | Proposed | Enterprise/multi-user scenarios |
 | S3/Cloud Storage | Proposed | Remote backup and sync |
+| [Sync Protocol](features/sync-protocol.md) | Proposed | Conflict-free sync between devices |
 | Compression | Proposed | Automatic archival of old entries |
 | Encryption | Proposed | At-rest encryption for sensitive entries |
 
