@@ -148,3 +148,57 @@ func TestRenderMarkdownWidth(t *testing.T) {
 		t.Error("Rendering should produce output for both widths")
 	}
 }
+
+func TestRenderMarkdownWithStyle(t *testing.T) {
+	// Reset global state
+	markdownRenderer = nil
+	cachedWidth = 0
+	cachedStyle = ""
+
+	content := "# Hello"
+
+	// Light style should produce output
+	result := RenderMarkdownWithStyle(content, 80, "light")
+	if result == "" {
+		t.Error("expected non-empty rendered output for light style")
+	}
+
+	// Notty style should produce output
+	markdownRenderer = nil
+	cachedWidth = 0
+	cachedStyle = ""
+	result = RenderMarkdownWithStyle(content, 80, "notty")
+	if result == "" {
+		t.Error("expected non-empty rendered output for notty style")
+	}
+}
+
+func TestRenderMarkdownStyleChange(t *testing.T) {
+	markdownRenderer = nil
+	cachedWidth = 0
+	cachedStyle = ""
+
+	content := "# Test"
+
+	dark := RenderMarkdownWithStyle(content, 80, "dark")
+
+	// Force re-creation by changing style
+	notty := RenderMarkdownWithStyle(content, 80, "notty")
+
+	// Different styles should produce different output
+	if dark == notty {
+		t.Error("expected different output for different styles")
+	}
+}
+
+func TestRenderMarkdownDefaultStyleBackwardCompat(t *testing.T) {
+	markdownRenderer = nil
+	cachedWidth = 0
+	cachedStyle = ""
+
+	content := "# Hello"
+	result := RenderMarkdown(content, 80)
+	if result == "" {
+		t.Error("expected non-empty rendered output from backward-compat RenderMarkdown")
+	}
+}

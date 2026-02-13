@@ -12,40 +12,20 @@ var markdownRenderer *glamour.TermRenderer
 // cachedWidth stores the width used for the current renderer
 var cachedWidth int
 
-// initMarkdownRenderer initializes the glamour renderer with the given width
-func initMarkdownRenderer(width int) error {
-	if width < 1 {
-		width = 80 // sensible default
-	}
+// cachedStyle stores the style used for the current renderer
+var cachedStyle string
 
-	// Use "dark" style for rich terminal rendering with colors and styling
-	// Alternative styles: "auto", "light", "pink", "notty"
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"),
-		glamour.WithWordWrap(width),
-	)
-	if err != nil {
-		return err
-	}
-
-	markdownRenderer = renderer
-	cachedWidth = width
-	return nil
-}
-
-// updateMarkdownWidth updates the word wrap width for the renderer
-func updateMarkdownWidth(width int) error {
+// initMarkdownRenderer initializes the glamour renderer with the given width and style
+func initMarkdownRenderer(width int, style string) error {
 	if width < 1 {
 		width = 80
 	}
-
-	// Only recreate renderer if width actually changed
-	if width == cachedWidth {
-		return nil
+	if style == "" {
+		style = "dark"
 	}
 
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"),
+		glamour.WithStylePath(style),
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {
@@ -54,34 +34,52 @@ func updateMarkdownWidth(width int) error {
 
 	markdownRenderer = renderer
 	cachedWidth = width
+	cachedStyle = style
 	return nil
 }
 
-// RenderMarkdown renders markdown content to a rich text string suitable for terminal display.
-// Returns the original content if rendering fails.
-func RenderMarkdown(content string, width int) string {
+// updateMarkdownRenderer recreates the renderer if width or style changed
+func updateMarkdownRenderer(width int, style string) error {
+	if width < 1 {
+		width = 80
+	}
+	if style == "" {
+		style = "dark"
+	}
+
+	if width == cachedWidth && style == cachedStyle {
+		return nil
+	}
+
+	return initMarkdownRenderer(width, style)
+}
+
+// RenderMarkdownWithStyle renders markdown content using the specified glamour style.
+func RenderMarkdownWithStyle(content string, width int, style string) string {
 	if content == "" {
 		return ""
 	}
 
-	// Initialize or update renderer if needed
-	if markdownRenderer == nil {
-		if err := initMarkdownRenderer(width); err != nil {
-			return content // fallback to raw content on error
+	if markdownRenderer == nil || style != cachedStyle {
+		if err := initMarkdownRenderer(width, style); err != nil {
+			return content
 		}
 	} else {
-		// Update width if it changed significantly (avoid re-creating for small changes)
-		if err := updateMarkdownWidth(width); err != nil {
+		if err := updateMarkdownRenderer(width, style); err != nil {
 			return content
 		}
 	}
 
 	rendered, err := markdownRenderer.Render(content)
 	if err != nil {
-		// If rendering fails, return original content
 		return content
 	}
 
-	// Glamour adds trailing newlines, trim them for cleaner display
 	return strings.TrimRight(rendered, "\n")
+}
+
+// RenderMarkdown renders markdown content to a rich text string suitable for terminal display.
+// Uses "dark" style by default. Returns the original content if rendering fails.
+func RenderMarkdown(content string, width int) string {
+	return RenderMarkdownWithStyle(content, width, "dark")
 }
