@@ -17,6 +17,17 @@ type ShellConfig struct {
 	ShowBackend bool   `mapstructure:"show_backend"`
 }
 
+// ThemeConfig holds TUI and markdown theme configuration.
+type ThemeConfig struct {
+	Preset        string `mapstructure:"preset"`
+	Primary       string `mapstructure:"primary"`
+	Secondary     string `mapstructure:"secondary"`
+	Accent        string `mapstructure:"accent"`
+	Muted         string `mapstructure:"muted"`
+	Danger        string `mapstructure:"danger"`
+	MarkdownStyle string `mapstructure:"markdown_style"`
+}
+
 // Config holds the application configuration.
 type Config struct {
 	Storage          string      `mapstructure:"storage"`
@@ -27,6 +38,7 @@ type Config struct {
 	ContextProviders []string    `mapstructure:"context_providers"`
 	ContextResolvers []string    `mapstructure:"context_resolvers"`
 	Shell            ShellConfig `mapstructure:"shell"`
+	Theme            ThemeConfig `mapstructure:"theme"`
 }
 
 // DefaultDataDir returns the default data directory (~/.diaryctl/).
@@ -56,6 +68,7 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("shell.streak_icon", "🔥")
 	v.SetDefault("shell.show_context", true)
 	v.SetDefault("shell.show_backend", false)
+	v.SetDefault("theme.preset", "default-dark")
 
 	// Config file
 	if configPath != "" {
