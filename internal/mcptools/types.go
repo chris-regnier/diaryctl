@@ -31,3 +31,17 @@ type EntryResult struct {
 	Date    string  `json:"date"`
 	Score   float64 `json:"score"`
 }
+
+// CreateEntryInput is the input schema for the create_entry MCP tool.
+type CreateEntryInput struct {
+	Content           string            `json:"content" jsonschema-description:"Entry content"`
+	TemplateNames     []string          `json:"template_names,omitempty" jsonschema-description:"Template names to compose"`
+	TemplateVariables map[string]string `json:"template_variables,omitempty" jsonschema-description:"Variables for template substitution"`
+}
+
+// CreateEntryOutput is the output schema for the create_entry MCP tool.
+type CreateEntryOutput struct {
+	ID      string `json:"id"`
+	Date    string `json:"date"`
+	Preview string `json:"preview"`
+}

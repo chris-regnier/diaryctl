@@ -29,6 +29,62 @@ func TestEntryContextRefJSON(t *testing.T) {
 	}
 }
 
+func TestNew(t *testing.T) {
+	t.Run("creates entry with valid content", func(t *testing.T) {
+		e, err := New("hello world", nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if e.Content != "hello world" {
+			t.Errorf("content = %q, want %q", e.Content, "hello world")
+		}
+		if err := ValidateID(e.ID); err != nil {
+			t.Errorf("invalid ID: %v", err)
+		}
+		if e.CreatedAt.IsZero() {
+			t.Error("CreatedAt should not be zero")
+		}
+		if e.UpdatedAt.IsZero() {
+			t.Error("UpdatedAt should not be zero")
+		}
+	})
+
+	t.Run("trims whitespace", func(t *testing.T) {
+		e, err := New("  trimmed  ", nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if e.Content != "trimmed" {
+			t.Errorf("content = %q, want %q", e.Content, "trimmed")
+		}
+	})
+
+	t.Run("attaches template refs", func(t *testing.T) {
+		refs := []TemplateRef{{TemplateID: "t1", TemplateName: "standup"}}
+		e, err := New("content", refs)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(e.Templates) != 1 || e.Templates[0].TemplateName != "standup" {
+			t.Errorf("templates = %v, want standup ref", e.Templates)
+		}
+	})
+
+	t.Run("rejects empty content", func(t *testing.T) {
+		_, err := New("", nil)
+		if err == nil {
+			t.Error("expected error for empty content")
+		}
+	})
+
+	t.Run("rejects whitespace-only content", func(t *testing.T) {
+		_, err := New("   \n\t  ", nil)
+		if err == nil {
+			t.Error("expected error for whitespace-only content")
+		}
+	})
+}
+
 func TestValidateContextName(t *testing.T) {
 	tests := []struct {
 		name    string
