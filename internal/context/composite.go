@@ -3,6 +3,7 @@ package context
 import (
 	"context"
 
+	"github.com/chris-regnier/diaryctl/internal/mcptools"
 	"github.com/chris-regnier/diaryctl/internal/storage"
 )
 
@@ -13,7 +14,7 @@ type CompositeProvider struct {
 
 // NewCompositeProvider creates a provider backed by an in-memory MCP server.
 func NewCompositeProvider(store storage.Storage) (*CompositeProvider, error) {
-	_, transport := NewDiaryMCPServer(store)
+	_, transport := mcptools.NewDiaryMCPServer(store)
 	client, err := NewMCPClient(transport)
 	if err != nil {
 		return nil, err
@@ -29,7 +30,7 @@ func (p *CompositeProvider) Search(ctx context.Context, query string, limit int)
 
 // Filter implements Provider.Filter.
 func (p *CompositeProvider) Filter(ctx context.Context, opts storage.ListOptions) ([]EntryResult, error) {
-	input := FilterInput{
+	input := mcptools.FilterInput{
 		Limit: opts.Limit,
 	}
 	if opts.StartDate != nil {

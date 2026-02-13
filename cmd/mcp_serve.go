@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	icontext "github.com/chris-regnier/diaryctl/internal/context"
+	"github.com/chris-regnier/diaryctl/internal/mcptools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 )
@@ -44,7 +44,7 @@ func runMCPServe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create MCP server with registered tools
-	server := icontext.CreateMCPServer(store)
+	server := mcptools.CreateMCPServer(store, appConfig.DataDir)
 
 	// Log to stderr (stdout is reserved for MCP protocol)
 	log.SetOutput(os.Stderr)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/chris-regnier/diaryctl/internal/mcptools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -70,7 +71,7 @@ func (c *MCPClient) CallTool(ctx context.Context, name string, args any) (any, e
 
 // Search calls the search_entries tool.
 func (c *MCPClient) Search(ctx context.Context, query string, limit int) ([]EntryResult, error) {
-	result, err := c.CallTool(ctx, "search_entries", SearchInput{
+	result, err := c.CallTool(ctx, "search_entries", mcptools.SearchInput{
 		Query: query,
 		Limit: limit,
 	})
@@ -84,15 +85,15 @@ func (c *MCPClient) Search(ctx context.Context, query string, limit int) ([]Entr
 		return nil, fmt.Errorf("marshal output: %w", err)
 	}
 
-	var output SearchOutput
+	var output mcptools.SearchOutput
 	if err := json.Unmarshal(outputJSON, &output); err != nil {
 		return nil, fmt.Errorf("unmarshal search output: %w", err)
 	}
-	return output.Entries, nil
+	return convertEntryResults(output.Entries), nil
 }
 
 // Filter calls the filter_entries tool.
-func (c *MCPClient) Filter(ctx context.Context, input FilterInput) ([]EntryResult, error) {
+func (c *MCPClient) Filter(ctx context.Context, input mcptools.FilterInput) ([]EntryResult, error) {
 	result, err := c.CallTool(ctx, "filter_entries", input)
 	if err != nil {
 		return nil, err
@@ -104,9 +105,23 @@ func (c *MCPClient) Filter(ctx context.Context, input FilterInput) ([]EntryResul
 		return nil, fmt.Errorf("marshal output: %w", err)
 	}
 
-	var output FilterOutput
+	var output mcptools.FilterOutput
 	if err := json.Unmarshal(outputJSON, &output); err != nil {
 		return nil, fmt.Errorf("unmarshal filter output: %w", err)
 	}
-	return output.Entries, nil
+	return convertEntryResults(output.Entries), nil
+}
+
+// convertEntryResults converts mcptools.EntryResult to context.EntryResult.
+func convertEntryResults(results []mcptools.EntryResult) []EntryResult {
+	out := make([]EntryResult, len(results))
+	for i, r := range results {
+		out[i] = EntryResult{
+			ID:      r.ID,
+			Preview: r.Preview,
+			Date:    r.Date,
+			Score:   r.Score,
+		}
+	}
+	return out
 }

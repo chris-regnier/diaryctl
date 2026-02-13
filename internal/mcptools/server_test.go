@@ -1,4 +1,4 @@
-package context_test
+package mcptools_test
 
 import (
 	"context"
@@ -7,13 +7,12 @@ import (
 	"time"
 
 	"github.com/chris-regnier/diaryctl/internal/entry"
+	"github.com/chris-regnier/diaryctl/internal/mcptools"
 	"github.com/chris-regnier/diaryctl/internal/storage/markdown"
-	icontext "github.com/chris-regnier/diaryctl/internal/context"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestMCPServer_SearchEntries(t *testing.T) {
-	// Setup: create temp storage with test entries
 	dir := t.TempDir()
 	store, err := markdown.New(dir)
 	if err != nil {
@@ -21,7 +20,6 @@ func TestMCPServer_SearchEntries(t *testing.T) {
 	}
 	defer store.Close()
 
-	// Create test entries
 	e1 := entry.Entry{
 		ID:        "testid01",
 		Content:   "Today I learned about Go interfaces",
@@ -41,33 +39,28 @@ func TestMCPServer_SearchEntries(t *testing.T) {
 		t.Fatalf("failed to create entry: %v", err)
 	}
 
-	// Create MCP server and client
-	_, clientTransport := icontext.NewDiaryMCPServer(store)
+	_, clientTransport := mcptools.NewDiaryMCPServer(store)
 	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
 	session, err := client.Connect(context.Background(), clientTransport, nil)
 	if err != nil {
 		t.Fatalf("failed to connect client: %v", err)
 	}
 
-	// Call search_entries tool
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      "search_entries",
-		Arguments: icontext.SearchInput{Query: "Go interfaces", Limit: 10},
+		Arguments: mcptools.SearchInput{Query: "Go interfaces", Limit: 10},
 	})
 	if err != nil {
 		t.Fatalf("CallTool failed: %v", err)
 	}
 
-	// Verify result contains matching entry
-	var output icontext.SearchOutput
+	var output mcptools.SearchOutput
 	if result.StructuredContent != nil {
-		// Use structured content if available
 		outputJSON, _ := json.Marshal(result.StructuredContent)
 		if err := json.Unmarshal(outputJSON, &output); err != nil {
 			t.Fatalf("failed to unmarshal structured content: %v", err)
 		}
 	} else if len(result.Content) > 0 {
-		// Fall back to text content
 		contentJSON, _ := json.Marshal(result.Content[0])
 		var textContent struct {
 			Type string `json:"type"`
@@ -99,7 +92,6 @@ func TestMCPServer_FilterEntries(t *testing.T) {
 	}
 	defer store.Close()
 
-	// Create entries on different dates
 	now := time.Now()
 	yesterday := now.AddDate(0, 0, -1)
 
@@ -118,14 +110,13 @@ func TestMCPServer_FilterEntries(t *testing.T) {
 	_ = store.Create(e1)
 	_ = store.Create(e2)
 
-	_, clientTransport := icontext.NewDiaryMCPServer(store)
+	_, clientTransport := mcptools.NewDiaryMCPServer(store)
 	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
 	session, _ := client.Connect(context.Background(), clientTransport, nil)
 
-	// Filter for today only
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
 		Name: "filter_entries",
-		Arguments: icontext.FilterInput{
+		Arguments: mcptools.FilterInput{
 			StartDate: now.Format("2006-01-02"),
 			EndDate:   now.Format("2006-01-02"),
 			Limit:     10,
@@ -135,7 +126,7 @@ func TestMCPServer_FilterEntries(t *testing.T) {
 		t.Fatalf("CallTool failed: %v", err)
 	}
 
-	var output icontext.FilterOutput
+	var output mcptools.FilterOutput
 	if result.StructuredContent != nil {
 		outputJSON, _ := json.Marshal(result.StructuredContent)
 		_ = json.Unmarshal(outputJSON, &output)

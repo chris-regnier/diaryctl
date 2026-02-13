@@ -1,4 +1,4 @@
-package context
+package mcptools
 
 // SearchInput is the input schema for the search_entries MCP tool.
 type SearchInput struct {
@@ -22,4 +22,12 @@ type FilterInput struct {
 // FilterOutput is the output schema for the filter_entries MCP tool.
 type FilterOutput struct {
 	Entries []EntryResult `json:"entries"`
+}
+
+// EntryResult is the common output format for entry-related MCP tools.
+type EntryResult struct {
+	ID      string  `json:"id"`
+	Preview string  `json:"preview"`
+	Date    string  `json:"date"`
+	Score   float64 `json:"score"`
 }
