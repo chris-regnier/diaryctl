@@ -78,6 +78,29 @@ func ValidateContextName(name string) error {
 	return nil
 }
 
+// New creates a new Entry with a generated ID, current timestamps,
+// and the given content and template refs. Validates that content is non-empty.
+func New(content string, templates []TemplateRef) (Entry, error) {
+	content = strings.TrimSpace(content)
+	if err := ValidateContent(content); err != nil {
+		return Entry{}, err
+	}
+
+	id, err := NewID()
+	if err != nil {
+		return Entry{}, fmt.Errorf("generating entry ID: %w", err)
+	}
+
+	now := time.Now().UTC()
+	return Entry{
+		ID:        id,
+		Content:   content,
+		CreatedAt: now,
+		UpdatedAt: now,
+		Templates: templates,
+	}, nil
+}
+
 // Preview returns a truncated preview of the entry content.
 func (e *Entry) Preview(maxLen int) string {
 	content := strings.ReplaceAll(e.Content, "\n", " ")

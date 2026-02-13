@@ -40,5 +40,11 @@ func CreateMCPServer(store storage.Storage, dataDir string) *mcp.Server {
 		Description: "Filter diary entries by date range and template",
 	}, FilterHandler(store))
 
+	// Write tools
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "create_entry",
+		Description: "Create a diary entry with optional template composition and variable substitution",
+	}, CreateEntryHandler(store, dataDir))
+
 	return server
 }
