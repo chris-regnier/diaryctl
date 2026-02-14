@@ -46,5 +46,10 @@ func CreateMCPServer(store storage.Storage, dataDir string) *mcp.Server {
 		Description: "Create a diary entry with optional template composition and variable substitution",
 	}, CreateEntryHandler(store, dataDir))
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_templates",
+		Description: "Discover available templates and their previews",
+	}, ListTemplatesHandler(store))
+
 	return server
 }

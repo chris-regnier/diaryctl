@@ -45,3 +45,20 @@ type CreateEntryOutput struct {
 	Date    string `json:"date"`
 	Preview string `json:"preview"`
 }
+
+// ListTemplatesInput is the input schema for the list_templates MCP tool.
+type ListTemplatesInput struct {
+	Limit int `json:"limit" jsonschema-description:"Maximum number of templates to return"`
+}
+
+// ListTemplatesOutput is the output schema for the list_templates MCP tool.
+type ListTemplatesOutput struct {
+	Templates []TemplateResult `json:"templates"`
+}
+
+// TemplateResult represents a template in list_templates output.
+type TemplateResult struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Preview string `json:"preview"`
+}
