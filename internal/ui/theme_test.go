@@ -101,6 +101,9 @@ func TestResolveThemeAllPresets(t *testing.T) {
 			if string(theme.Danger) == "" {
 				t.Error("expected danger color to be set")
 			}
+			if string(theme.Background) == "" {
+				t.Error("expected background color to be set")
+			}
 			if theme.MarkdownStyle != tc.markdownStyle {
 				t.Errorf("expected markdown_style %q, got %q", tc.markdownStyle, theme.MarkdownStyle)
 			}
@@ -117,4 +120,17 @@ func TestThemeStyleMethods(t *testing.T) {
 	_ = theme.AccentStyle()
 	_ = theme.DangerStyle()
 	_ = theme.BorderStyle()
+	_ = theme.ViewPaneStyle()
+}
+
+func TestResolveThemeBackgroundOverride(t *testing.T) {
+	cfg := config.ThemeConfig{
+		Preset:     "default-dark",
+		Background: "#112233",
+	}
+	theme := ResolveTheme(cfg)
+
+	if string(theme.Background) != "#112233" {
+		t.Errorf("expected background '#112233', got %q", string(theme.Background))
+	}
 }

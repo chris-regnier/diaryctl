@@ -26,7 +26,7 @@ func TestShowFullContent(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	ui.FormatEntryFull(&buf, got)
+	ui.FormatEntryFull(&buf, got, "dark")
 	output := buf.String()
 	// Strip ANSI codes for testing since markdown rendering adds color codes
 	outputStripped := stripANSI(output)
@@ -72,7 +72,7 @@ func TestShowTemplateAttribution(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	ui.FormatEntryFull(&buf, got)
+	ui.FormatEntryFull(&buf, got, "dark")
 	output := buf.String()
 
 	if !strings.Contains(output, "Templates: daily") {
@@ -90,7 +90,7 @@ func TestShowNoTemplateAttribution(t *testing.T) {
 
 	got, _ := s.Get(id)
 	var buf bytes.Buffer
-	ui.FormatEntryFull(&buf, got)
+	ui.FormatEntryFull(&buf, got, "dark")
 
 	if strings.Contains(buf.String(), "Templates:") {
 		t.Errorf("should not show Templates line for entry without templates:\n%s", buf.String())

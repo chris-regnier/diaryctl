@@ -32,7 +32,8 @@ func FormatNoChanges(w io.Writer, id string) {
 }
 
 // FormatEntryFull formats a full entry display with metadata header.
-func FormatEntryFull(w io.Writer, e entry.Entry) {
+// The markdownStyle parameter controls glamour rendering (e.g. "dark", "light").
+func FormatEntryFull(w io.Writer, e entry.Entry, markdownStyle string) {
 	fmt.Fprintf(w, "Entry: %s\n", e.ID)
 	fmt.Fprintf(w, "Created: %s\n", e.CreatedAt.Local().Format("2006-01-02 15:04"))
 	fmt.Fprintf(w, "Modified: %s\n", e.UpdatedAt.Local().Format("2006-01-02 15:04"))
@@ -54,7 +55,7 @@ func FormatEntryFull(w io.Writer, e entry.Entry) {
 
 	// Render markdown content as rich text
 	// Use a reasonable default width (80 chars) which will be adjusted by the pager if used
-	rendered := RenderMarkdown(e.Content, 80)
+	rendered := RenderMarkdownWithStyle(e.Content, 80, markdownStyle)
 	fmt.Fprintln(w, rendered)
 }
 
