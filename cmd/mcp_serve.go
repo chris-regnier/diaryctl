@@ -13,13 +13,15 @@ import (
 var mcpServeCmd = &cobra.Command{
 	Use:   "mcp-serve",
 	Short: "Run MCP server on stdio",
-	Long: `Starts a Model Context Protocol (MCP) server that exposes diary search
-and filter tools over stdio transport. This allows MCP clients like Claude Desktop
-to query your diary entries.
+	Long: `Starts a Model Context Protocol (MCP) server that exposes diary tools
+over stdio transport. This allows MCP clients like Claude Desktop to interact
+with your diary.
 
 Available tools:
   - search_entries: Fuzzy text search over diary content
   - filter_entries: Filter entries by date range and template
+  - create_entry: Create entries with optional template composition
+  - list_templates: Discover available templates
 
 Example usage in Claude Desktop config:
   {
