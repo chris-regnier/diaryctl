@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/chris-regnier/diaryctl/internal/config"
 )
@@ -171,4 +172,63 @@ func (t Theme) ViewPaneStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Background(t.Background).
 		Foreground(t.Primary)
+}
+
+// NewList creates a list.Model with delegate and chrome styles derived from the theme.
+func (t Theme) NewList(items []list.Item, width, height int) list.Model {
+	l := list.New(items, t.ListDelegate(), width, height)
+	l.Styles = t.ListStyles()
+	return l
+}
+
+// ListDelegate returns a list.DefaultDelegate with item styles derived from the theme.
+func (t Theme) ListDelegate() list.DefaultDelegate {
+	d := list.NewDefaultDelegate()
+	d.Styles.NormalTitle = lipgloss.NewStyle().
+		Foreground(t.Primary).
+		Background(t.Background).
+		Padding(0, 0, 0, 2)
+	d.Styles.NormalDesc = d.Styles.NormalTitle.
+		Foreground(t.Muted)
+	d.Styles.SelectedTitle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(t.Accent).
+		Foreground(t.Accent).
+		Background(t.Background).
+		Padding(0, 0, 0, 1)
+	d.Styles.SelectedDesc = d.Styles.SelectedTitle.
+		Foreground(t.Secondary)
+	d.Styles.DimmedTitle = lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Background(t.Background).
+		Padding(0, 0, 0, 2)
+	d.Styles.DimmedDesc = d.Styles.DimmedTitle.
+		Foreground(t.Muted)
+	return d
+}
+
+// ListStyles returns list.Styles (chrome around the list) derived from the theme.
+func (t Theme) ListStyles() list.Styles {
+	s := list.DefaultStyles()
+	s.Title = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(t.Primary).
+		Background(t.Background)
+	s.TitleBar = lipgloss.NewStyle().
+		Background(t.Background)
+	s.FilterPrompt = lipgloss.NewStyle().
+		Foreground(t.Accent)
+	s.FilterCursor = lipgloss.NewStyle().
+		Foreground(t.Accent)
+	s.PaginationStyle = lipgloss.NewStyle().
+		Foreground(t.Muted)
+	s.HelpStyle = lipgloss.NewStyle().
+		Foreground(t.Muted)
+	s.ActivePaginationDot = lipgloss.NewStyle().
+		Foreground(t.Accent)
+	s.InactivePaginationDot = lipgloss.NewStyle().
+		Foreground(t.Muted)
+	s.NoItems = lipgloss.NewStyle().
+		Foreground(t.Muted)
+	return s
 }

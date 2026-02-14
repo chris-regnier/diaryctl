@@ -121,6 +121,9 @@ func TestThemeStyleMethods(t *testing.T) {
 	_ = theme.DangerStyle()
 	_ = theme.BorderStyle()
 	_ = theme.ViewPaneStyle()
+	_ = theme.ListDelegate()
+	_ = theme.ListStyles()
+	_ = theme.NewList(nil, 0, 0)
 }
 
 func TestResolveThemeBackgroundOverride(t *testing.T) {
