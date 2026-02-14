@@ -77,9 +77,3 @@ func RenderMarkdownWithStyle(content string, width int, style string) string {
 
 	return strings.TrimRight(rendered, "\n")
 }
-
-// RenderMarkdown renders markdown content to a rich text string suitable for terminal display.
-// Uses "dark" style by default. Returns the original content if rendering fails.
-func RenderMarkdown(content string, width int) string {
-	return RenderMarkdownWithStyle(content, width, "dark")
-}

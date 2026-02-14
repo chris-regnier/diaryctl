@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestRenderMarkdown(t *testing.T) {
+func TestRenderMarkdownWithStyleDark(t *testing.T) {
 	tests := []struct {
 		name           string
 		input          string
@@ -94,7 +94,7 @@ Some regular text here.`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := RenderMarkdown(tt.input, tt.width)
+			got := RenderMarkdownWithStyle(tt.input, tt.width, "dark")
 			// Strip ANSI codes for testing content, since Glamour adds color codes
 			gotStripped := stripANSI(got)
 
@@ -118,11 +118,11 @@ func TestRenderMarkdownFallback(t *testing.T) {
 	input := "Some content"
 	width := 80
 
-	got := RenderMarkdown(input, width)
+	got := RenderMarkdownWithStyle(input, width, "dark")
 
 	// Should always return something (either rendered or original)
 	if got == "" && input != "" {
-		t.Error("RenderMarkdown() should not return empty string for non-empty input")
+		t.Error("RenderMarkdownWithStyle() should not return empty string for non-empty input")
 	}
 }
 
@@ -131,8 +131,8 @@ func TestRenderMarkdownWidth(t *testing.T) {
 	input := "# Title\n\nSome text here that is reasonably long and should demonstrate word wrapping behavior."
 
 	// Render with different widths
-	narrow := RenderMarkdown(input, 40)
-	wide := RenderMarkdown(input, 100)
+	narrow := RenderMarkdownWithStyle(input, 40, "dark")
+	wide := RenderMarkdownWithStyle(input, 100, "dark")
 
 	// Both should contain the content
 	if !strings.Contains(narrow, "Title") {
@@ -191,14 +191,3 @@ func TestRenderMarkdownStyleChange(t *testing.T) {
 	}
 }
 
-func TestRenderMarkdownDefaultStyleBackwardCompat(t *testing.T) {
-	markdownRenderer = nil
-	cachedWidth = 0
-	cachedStyle = ""
-
-	content := "# Hello"
-	result := RenderMarkdown(content, 80)
-	if result == "" {
-		t.Error("expected non-empty rendered output from backward-compat RenderMarkdown")
-	}
-}
