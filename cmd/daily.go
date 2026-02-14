@@ -66,7 +66,7 @@ prints a grouped-by-day summary to stdout.`,
 			StartDate:    startDate,
 			EndDate:      endDate,
 			TemplateName: dailyTemplateFilter,
-		})
+		}, ui.ResolveTheme(appConfig.Theme))
 	},
 }
 

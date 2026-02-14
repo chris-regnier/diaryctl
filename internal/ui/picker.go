@@ -187,19 +187,20 @@ type pickerModel struct {
 	err    error
 }
 
-func newPickerModel(store StorageProvider, days []storage.DaySummary) pickerModel {
+func newPickerModel(store StorageProvider, days []storage.DaySummary, theme Theme) pickerModel {
 	// Build date list items
 	items := make([]list.Item, len(days))
 	for i, d := range days {
 		items[i] = dateItem{summary: d}
 	}
 
-	dateList := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	dateList := theme.NewList(items, 0, 0)
 	dateList.Title = "Daily View"
 	dateList.SetShowHelp(false)
 
 	return pickerModel{
 		store:    store,
+		cfg:     TUIConfig{Theme: theme},
 		screen:   screenDateList,
 		days:     days,
 		dateList: dateList,
@@ -297,7 +298,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.contextEntryID != "" {
 			title = fmt.Sprintf("Contexts for %s", m.contextEntryID)
 		}
-		m.contextList = list.New(items, list.NewDefaultDelegate(), m.contentWidth()-4, m.height-6)
+		m.contextList = m.cfg.Theme.NewList(items, m.contentWidth()-4, m.height-6)
 		m.contextList.Title = title
 		m.contextList.SetShowHelp(false)
 		m.screen = screenContextPanel
@@ -325,7 +326,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items[i] = templateItem{tmpl: t, selected: false}
 		}
 
-		m.templateList = list.New(items, list.NewDefaultDelegate(), m.contentWidth()-4, m.height/2)
+		m.templateList = m.cfg.Theme.NewList(items, m.contentWidth()-4, m.height/2)
 		m.templateList.Title = "Select Template(s)"
 		m.templateList.SetShowHelp(false)
 		m.templatePickerActive = true
@@ -349,7 +350,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for i, e := range msg.entries {
 			items[i] = entryItem{entry: e}
 		}
-		m.todayList = list.New(items, list.NewDefaultDelegate(), 0, 0)
+		m.todayList = m.cfg.Theme.NewList(items, 0, 0)
 		m.todayList.Title = ""
 		m.todayList.SetShowHelp(false)
 		// Build daily viewport
@@ -626,7 +627,7 @@ func (m pickerModel) loadDayDetail() (tea.Model, tea.Cmd) {
 	if day.Count == 1 {
 		label = "entry"
 	}
-	m.dayList = list.New(items, list.NewDefaultDelegate(), 0, 0)
+	m.dayList = m.cfg.Theme.NewList(items, 0, 0)
 	m.dayList.Title = fmt.Sprintf("%s (%d %s)", date.Format("2006-01-02"), day.Count, label)
 	m.dayList.SetShowHelp(false)
 	if m.ready {
@@ -804,7 +805,7 @@ func (m pickerModel) loadDateList() (tea.Model, tea.Cmd) {
 	for i, d := range days {
 		items[i] = dateItem{summary: d}
 	}
-	m.dateList = list.New(items, list.NewDefaultDelegate(), 0, 0)
+	m.dateList = m.cfg.Theme.NewList(items, 0, 0)
 	m.dateList.Title = "Daily View"
 	m.dateList.SetShowHelp(false)
 	if m.ready {
@@ -1561,7 +1562,7 @@ func RunTUI(store StorageProvider, cfg TUIConfig) error {
 }
 
 // RunPicker launches the interactive daily picker.
-func RunPicker(store StorageProvider, opts storage.ListDaysOptions) error {
+func RunPicker(store StorageProvider, opts storage.ListDaysOptions, theme Theme) error {
 	days, err := store.ListDays(opts)
 	if err != nil {
 		return err
@@ -1572,7 +1573,7 @@ func RunPicker(store StorageProvider, opts storage.ListDaysOptions) error {
 		return nil
 	}
 
-	m := newPickerModel(store, days)
+	m := newPickerModel(store, days, theme)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	result, err := p.Run()
 	if err != nil {

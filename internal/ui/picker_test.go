@@ -186,7 +186,7 @@ func makeTestDays() (*mockStorage, []storage.DaySummary) {
 
 func TestPickerDayNavigation(t *testing.T) {
 	mock, days := makeTestDays()
-	m := newPickerModel(mock, days)
+	m := newPickerModel(mock, days, presets["default-dark"])
 
 	// Simulate window size
 	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -271,7 +271,7 @@ func TestPickerManyEntriesPerDay(t *testing.T) {
 		byID: byID,
 	}
 
-	m := newPickerModel(mock, mock.days)
+	m := newPickerModel(mock, mock.days, presets["default-dark"])
 	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = sized.(pickerModel)
 
@@ -295,7 +295,7 @@ func TestPickerEmptyDateRange(t *testing.T) {
 		byID:    map[string]entry.Entry{},
 	}
 
-	m := newPickerModel(mock, mock.days)
+	m := newPickerModel(mock, mock.days, presets["default-dark"])
 	// With empty days, RunPicker would print message and not launch Bubble Tea
 	// Here we verify the model handles empty state gracefully
 	if len(m.days) != 0 {
@@ -305,7 +305,7 @@ func TestPickerEmptyDateRange(t *testing.T) {
 
 func TestPickerScreenTransitions(t *testing.T) {
 	mock, days := makeTestDays()
-	m := newPickerModel(mock, days)
+	m := newPickerModel(mock, days, presets["default-dark"])
 
 	// Simulate window size
 	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
