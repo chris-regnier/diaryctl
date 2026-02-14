@@ -107,7 +107,7 @@ func runDailyNonInteractive(startDate, endDate *time.Time, templateFilter string
 
 	var buf bytes.Buffer
 	ui.FormatDailySummary(&buf, dayEntries)
-	return ui.OutputOrPage(os.Stdout, buf.String(), false)
+	return ui.OutputOrPage(os.Stdout, buf.String(), false, ui.ResolveTheme(appConfig.Theme))
 }
 
 func init() {

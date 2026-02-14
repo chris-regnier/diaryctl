@@ -47,8 +47,8 @@ var showCmd = &cobra.Command{
 			ui.FormatJSON(os.Stdout, e)
 		} else {
 			var buf bytes.Buffer
-			ui.FormatEntryFull(&buf, e)
-			ui.OutputOrPage(os.Stdout, buf.String(), false)
+			ui.FormatEntryFull(&buf, e, ui.ResolveTheme(appConfig.Theme).MarkdownStyle)
+			ui.OutputOrPage(os.Stdout, buf.String(), false, ui.ResolveTheme(appConfig.Theme))
 		}
 
 		return nil

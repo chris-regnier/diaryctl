@@ -39,7 +39,7 @@ var deleteCmd = &cobra.Command{
 			fmt.Fprintf(os.Stdout, "Entry: %s (%s)\n", e.ID, e.CreatedAt.Local().Format("2006-01-02 15:04"))
 			fmt.Fprintf(os.Stdout, "Preview: %s\n\n", e.Preview(60))
 
-			confirmed, err := ui.Confirm("Delete this entry? This cannot be undone.")
+			confirmed, err := ui.Confirm("Delete this entry? This cannot be undone.", ui.ResolveTheme(appConfig.Theme))
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Error:", err)
 				os.Exit(2)

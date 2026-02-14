@@ -216,7 +216,7 @@ var templateDeleteCmd = &cobra.Command{
 
 		if !forceDeleteTemplate {
 			fmt.Fprintf(os.Stdout, "Template: %s (%s)\n", tmpl.Name, tmpl.ID)
-			confirmed, err := ui.Confirm("Delete this template? This cannot be undone.")
+			confirmed, err := ui.Confirm("Delete this template? This cannot be undone.", ui.ResolveTheme(appConfig.Theme))
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Error:", err)
 				os.Exit(2)

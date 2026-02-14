@@ -855,7 +855,8 @@ func (m pickerModel) View() string {
 
 			// Daily entry viewport
 			if m.dailyEntry != nil {
-				sections = append(sections, m.dailyViewport.View())
+				paneStyle := m.cfg.Theme.ViewPaneStyle().Width(m.contentWidth())
+				sections = append(sections, paneStyle.Render(m.dailyViewport.View()))
 			}
 
 			// Other entries list
@@ -881,7 +882,8 @@ func (m pickerModel) View() string {
 			m.entry.CreatedAt.Local().Format("2006-01-02 15:04"),
 			m.entry.UpdatedAt.Local().Format("2006-01-02 15:04")))
 		footer := m.cfg.Theme.HelpStyle().Render("↑/↓ scroll • esc back • q quit")
-		result = header + "\n" + meta + "\n\n" + m.viewport.View() + "\n" + footer
+		paneStyle := m.cfg.Theme.ViewPaneStyle().Width(m.contentWidth())
+		result = header + "\n" + meta + "\n\n" + paneStyle.Render(m.viewport.View()) + "\n" + footer
 	case screenContextPanel:
 		var b strings.Builder
 		b.WriteString(m.contextList.View())

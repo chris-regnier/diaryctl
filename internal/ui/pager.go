@@ -8,19 +8,17 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
 )
-
-var helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 
 type pagerModel struct {
 	viewport viewport.Model
 	content  string
 	ready    bool
-	maxWidth int // maximum viewport width (0 = no limit)
-	width    int // terminal width
-	height   int // terminal height
+	maxWidth int   // maximum viewport width (0 = no limit)
+	width    int   // terminal width
+	height   int   // terminal height
+	theme    Theme // resolved theme for styling
 }
 
 func (m pagerModel) Init() tea.Cmd {
@@ -86,19 +84,20 @@ func (m pagerModel) View() string {
 	if !m.ready {
 		return m.centerContent("Loading...")
 	}
-	footer := helpStyle.Render("↑/↓ scroll • q quit")
-	return m.centerContent(m.viewport.View() + "\n" + footer)
+	footer := m.theme.HelpStyle().Render("↑/↓ scroll • q quit")
+	paneStyle := m.theme.ViewPaneStyle().Width(m.contentWidth())
+	return m.centerContent(paneStyle.Render(m.viewport.View()) + "\n" + footer)
 }
 
 // PageOutput displays content through a Bubble Tea pager when running in a TTY
 // and the content exceeds terminal height. Otherwise writes directly to stdout.
 // Uses a default max width of 100 characters.
-func PageOutput(content string) error {
-	return PageOutputWithMaxWidth(content, 100)
+func PageOutput(content string, theme Theme) error {
+	return PageOutputWithMaxWidth(content, 100, theme)
 }
 
 // PageOutputWithMaxWidth displays content with a custom max width constraint.
-func PageOutputWithMaxWidth(content string, maxWidth int) error {
+func PageOutputWithMaxWidth(content string, maxWidth int, theme Theme) error {
 	// If not a TTY, write directly
 	if !term.IsTerminal(int(os.Stdout.Fd())) {
 		fmt.Print(content)
@@ -119,20 +118,20 @@ func PageOutputWithMaxWidth(content string, maxWidth int) error {
 	}
 
 	// Use Bubble Tea pager
-	p := tea.NewProgram(pagerModel{content: content, maxWidth: maxWidth}, tea.WithAltScreen())
+	p := tea.NewProgram(pagerModel{content: content, maxWidth: maxWidth, theme: theme}, tea.WithAltScreen())
 	_, err = p.Run()
 	return err
 }
 
 // OutputOrPage writes content to the writer, using the pager if appropriate.
 // When jsonOutput is true, always writes directly (no paging).
-func OutputOrPage(w io.Writer, content string, jsonOutput bool) error {
+func OutputOrPage(w io.Writer, content string, jsonOutput bool, theme Theme) error {
 	if jsonOutput {
 		fmt.Fprint(w, content)
 		return nil
 	}
 	if w == os.Stdout {
-		return PageOutput(content)
+		return PageOutput(content, theme)
 	}
 	fmt.Fprint(w, content)
 	return nil

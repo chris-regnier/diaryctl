@@ -65,7 +65,7 @@ var listCmd = &cobra.Command{
 		} else {
 			var buf bytes.Buffer
 			ui.FormatEntryList(&buf, entries)
-			ui.OutputOrPage(os.Stdout, buf.String(), false)
+			ui.OutputOrPage(os.Stdout, buf.String(), false, ui.ResolveTheme(appConfig.Theme))
 		}
 
 		return nil

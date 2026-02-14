@@ -12,6 +12,7 @@ type Theme struct {
 	Accent        lipgloss.Color
 	Muted         lipgloss.Color
 	Danger        lipgloss.Color
+	Background    lipgloss.Color
 	MarkdownStyle string
 }
 
@@ -23,6 +24,7 @@ var presets = map[string]Theme{
 		Accent:        lipgloss.Color("33"),
 		Muted:         lipgloss.Color("241"),
 		Danger:        lipgloss.Color("9"),
+		Background:    lipgloss.Color("235"),
 		MarkdownStyle: "dark",
 	},
 	"default-light": {
@@ -31,6 +33,7 @@ var presets = map[string]Theme{
 		Accent:        lipgloss.Color("27"),
 		Muted:         lipgloss.Color("245"),
 		Danger:        lipgloss.Color("1"),
+		Background:    lipgloss.Color("254"),
 		MarkdownStyle: "light",
 	},
 	"dracula": {
@@ -39,6 +42,7 @@ var presets = map[string]Theme{
 		Accent:        lipgloss.Color("#BD93F9"),
 		Muted:         lipgloss.Color("#6272A4"),
 		Danger:        lipgloss.Color("#FF5555"),
+		Background:    lipgloss.Color("#282A36"),
 		MarkdownStyle: "dark",
 	},
 	"ayu-dark": {
@@ -47,6 +51,7 @@ var presets = map[string]Theme{
 		Accent:        lipgloss.Color("#E6B450"),
 		Muted:         lipgloss.Color("#565B66"),
 		Danger:        lipgloss.Color("#D95757"),
+		Background:    lipgloss.Color("#0D1017"),
 		MarkdownStyle: "dark",
 	},
 	"ayu-light": {
@@ -55,6 +60,7 @@ var presets = map[string]Theme{
 		Accent:        lipgloss.Color("#F2AE49"),
 		Muted:         lipgloss.Color("#8A9199"),
 		Danger:        lipgloss.Color("#E65050"),
+		Background:    lipgloss.Color("#FAFAFA"),
 		MarkdownStyle: "light",
 	},
 	"catppuccin-mocha": {
@@ -63,6 +69,7 @@ var presets = map[string]Theme{
 		Accent:        lipgloss.Color("#CBA6F7"),
 		Muted:         lipgloss.Color("#6C7086"),
 		Danger:        lipgloss.Color("#F38BA8"),
+		Background:    lipgloss.Color("#1E1E2E"),
 		MarkdownStyle: "dark",
 	},
 	"catppuccin-latte": {
@@ -71,6 +78,7 @@ var presets = map[string]Theme{
 		Accent:        lipgloss.Color("#8839EF"),
 		Muted:         lipgloss.Color("#9CA0B0"),
 		Danger:        lipgloss.Color("#D20F39"),
+		Background:    lipgloss.Color("#EFF1F5"),
 		MarkdownStyle: "light",
 	},
 	"gruvbox-dark": {
@@ -79,6 +87,7 @@ var presets = map[string]Theme{
 		Accent:        lipgloss.Color("#FABD2F"),
 		Muted:         lipgloss.Color("#928374"),
 		Danger:        lipgloss.Color("#FB4934"),
+		Background:    lipgloss.Color("#282828"),
 		MarkdownStyle: "dark",
 	},
 	"gruvbox-light": {
@@ -87,6 +96,7 @@ var presets = map[string]Theme{
 		Accent:        lipgloss.Color("#D79921"),
 		Muted:         lipgloss.Color("#928374"),
 		Danger:        lipgloss.Color("#CC241D"),
+		Background:    lipgloss.Color("#FBF1C7"),
 		MarkdownStyle: "light",
 	},
 }
@@ -118,6 +128,9 @@ func ResolveTheme(cfg config.ThemeConfig) Theme {
 	}
 	if cfg.Danger != "" {
 		theme.Danger = lipgloss.Color(cfg.Danger)
+	}
+	if cfg.Background != "" {
+		theme.Background = lipgloss.Color(cfg.Background)
 	}
 	if cfg.MarkdownStyle != "" {
 		theme.MarkdownStyle = cfg.MarkdownStyle
@@ -151,4 +164,11 @@ func (t Theme) BorderStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.Secondary)
+}
+
+// ViewPaneStyle returns a lipgloss style for content view panes with themed background.
+func (t Theme) ViewPaneStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Background(t.Background).
+		Foreground(t.Primary)
 }

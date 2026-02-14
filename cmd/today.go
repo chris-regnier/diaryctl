@@ -58,8 +58,8 @@ func todayRun(w io.Writer, idOnly bool, contentOnly bool) error {
 	}
 
 	var buf bytes.Buffer
-	ui.FormatEntryFull(&buf, e)
-	ui.OutputOrPage(w, buf.String(), false)
+	ui.FormatEntryFull(&buf, e, ui.ResolveTheme(appConfig.Theme).MarkdownStyle)
+	ui.OutputOrPage(w, buf.String(), false, ui.ResolveTheme(appConfig.Theme))
 	return nil
 }
 

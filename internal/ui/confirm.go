@@ -8,15 +8,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var (
-	promptStyle  = lipgloss.NewStyle().Bold(true)
-	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
-)
-
 type confirmModel struct {
 	prompt    string
 	confirmed bool
 	done      bool
+	theme     Theme
 }
 
 func (m confirmModel) Init() tea.Cmd {
@@ -44,6 +40,8 @@ func (m confirmModel) View() string {
 	if m.done {
 		return ""
 	}
+	promptStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Primary)
+	warningStyle := m.theme.DangerStyle()
 	return fmt.Sprintf("%s %s",
 		promptStyle.Render(m.prompt),
 		warningStyle.Render("[y/N]"),
@@ -51,8 +49,8 @@ func (m confirmModel) View() string {
 }
 
 // Confirm shows an interactive confirmation prompt and returns true if the user confirms.
-func Confirm(prompt string) (bool, error) {
-	m := confirmModel{prompt: prompt}
+func Confirm(prompt string, theme Theme) (bool, error) {
+	m := confirmModel{prompt: prompt, theme: theme}
 	p := tea.NewProgram(m)
 	result, err := p.Run()
 	if err != nil {

@@ -25,6 +25,7 @@ type ThemeConfig struct {
 	Accent        string `mapstructure:"accent"`
 	Muted         string `mapstructure:"muted"`
 	Danger        string `mapstructure:"danger"`
+	Background    string `mapstructure:"background"`
 	MarkdownStyle string `mapstructure:"markdown_style"`
 }
 

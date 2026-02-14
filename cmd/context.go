@@ -81,7 +81,7 @@ var contextDeleteCmd = &cobra.Command{
 		}
 		if !forceDeleteContext {
 			fmt.Fprintf(os.Stdout, "Context: %s (%s)\n", ctx.Name, ctx.ID)
-			confirmed, err := ui.Confirm("Delete this context? This cannot be undone.")
+			confirmed, err := ui.Confirm("Delete this context? This cannot be undone.", ui.ResolveTheme(appConfig.Theme))
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Error:", err)
 				os.Exit(2)
