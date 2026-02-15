@@ -186,13 +186,17 @@ func (t Theme) bgEscapeCode() string {
 }
 
 // PaintScreen fills every line to termWidth (with optional centering) and pads
-// vertically to termHeight, using the theme background color. Each line is
-// padded with background-colored spaces AND a terminal-level \x1b[K (erase to
-// end of line) as a safety net, ensuring the background fills the full terminal
-// width even if lipgloss.Width measurement is slightly off.
+// vertically to termHeight, using the theme background color.
+//
+// The strategy works WITH Bubble Tea's renderer rather than against it:
+// each line ends with a raw SGR background-set escape (\x1b[48;...m) so that
+// the renderer's own \x1b[K] (erase-to-end-of-line, appended to lines shorter
+// than the terminal width) fills the remaining space with our themed background
+// instead of the terminal default. Explicit space-padding is also applied as a
+// best-effort fill for the content area.
 func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth int) string {
 	bgPad := lipgloss.NewStyle().Background(t.Background)
-	clearEOL := t.bgEscapeCode() + "\x1b[K"
+	setBg := t.bgEscapeCode() // raw SGR: sets bg so renderer's \x1b[K] uses our color
 
 	leftPad := 0
 	if contentWidth > 0 && contentWidth < termWidth {
@@ -217,11 +221,13 @@ func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth i
 		if rightPad > 0 {
 			b.WriteString(bgPad.Render(strings.Repeat(" ", rightPad)))
 		}
-		b.WriteString(clearEOL)
+		b.WriteString(setBg) // ensure renderer's \x1b[K] uses our bg
 		lines[i] = b.String()
 	}
 
-	emptyLine := bgPad.Render(strings.Repeat(" ", termWidth)) + clearEOL
+	// Empty lines: explicit space-padding (best-effort) + bg SGR suffix so
+	// the renderer's \x1b[K] also fills any remaining gap with our color.
+	emptyLine := bgPad.Render(strings.Repeat(" ", termWidth)) + setBg
 	for len(lines) < termHeight {
 		lines = append(lines, emptyLine)
 	}
@@ -229,15 +235,14 @@ func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth i
 	return strings.Join(lines[:termHeight], "\n")
 }
 
-// ClearLineEnds appends a terminal-level erase-to-end-of-line (\x1b[K) to
-// every line, ensuring the theme background fills to the right terminal edge.
-// Use this for output produced by lipgloss.Place or similar that may not
-// extend to the full terminal width.
+// ClearLineEnds sets the theme background at the end of every line so that
+// Bubble Tea's renderer fills remaining space with \x1b[K] using our color.
+// Use this for output produced by lipgloss.Place or similar.
 func (t Theme) ClearLineEnds(content string) string {
-	clearEOL := t.bgEscapeCode() + "\x1b[K"
+	setBg := t.bgEscapeCode()
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
-		lines[i] = line + clearEOL
+		lines[i] = line + setBg
 	}
 	return strings.Join(lines, "\n")
 }

@@ -246,15 +246,17 @@ func TestBgEscapeCode(t *testing.T) {
 	}
 }
 
-func TestPaintScreenIncludesClearEOL(t *testing.T) {
+func TestPaintScreenIncludesBgSuffix(t *testing.T) {
 	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
 	output := theme.PaintScreen("hello", 40, 3, 40)
+	bgCode := theme.bgEscapeCode()
 
-	// Every line should end with \x1b[K (erase to end of line)
+	// Every line should end with the bg SGR escape so the renderer's
+	// \x1b[K] fills remaining space with our themed background.
 	lines := strings.Split(output, "\n")
 	for i, line := range lines {
-		if !strings.HasSuffix(line, "\x1b[K") {
-			t.Errorf("line %d: expected to end with \\x1b[K erase sequence", i)
+		if !strings.HasSuffix(line, bgCode) {
+			t.Errorf("line %d: expected to end with bg escape %q", i, bgCode)
 		}
 	}
 }
