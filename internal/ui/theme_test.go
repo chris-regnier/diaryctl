@@ -123,87 +123,109 @@ func TestThemeStyleMethods(t *testing.T) {
 	_ = theme.DangerStyle()
 	_ = theme.BorderStyle()
 	_ = theme.ViewPaneStyle()
-	_ = theme.FullScreenStyle(80, 24)
+	_ = theme.PaintScreen("test", 80, 24, 80)
 	_ = theme.ListDelegate()
 	_ = theme.ListStyles()
 	_ = theme.NewList(nil, 0, 0)
 }
 
-func TestFullScreenStyleDimensions(t *testing.T) {
+func TestPaintScreenDimensions(t *testing.T) {
 	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
-	style := theme.FullScreenStyle(40, 10)
-	output := style.Render("hello")
+	output := theme.PaintScreen("hello", 40, 10, 40)
 
-	lines := countLines(output)
-	if lines != 10 {
-		t.Errorf("expected 10 lines, got %d", lines)
+	lines := strings.Split(stripANSI(output), "\n")
+	if len(lines) != 10 {
+		t.Errorf("expected 10 lines, got %d", len(lines))
 	}
-
-	// Each line should be padded to width 40 (after stripping ANSI)
-	for i, line := range strings.Split(stripANSI(output), "\n") {
-		// lipgloss may add trailing reset sequences but stripped line should be 40 chars
-		if len(line) != 40 {
-			t.Errorf("line %d: expected width 40, got %d", i, len(line))
+	for i, line := range lines {
+		if len(line) < 40 {
+			t.Errorf("line %d: expected min width 40, got %d", i, len(line))
 		}
 	}
 }
 
-func TestFullScreenStyleProperties(t *testing.T) {
-	for _, preset := range []string{"default-dark", "default-light", "dracula", "catppuccin-mocha"} {
-		t.Run(preset, func(t *testing.T) {
-			theme := ResolveTheme(config.ThemeConfig{Preset: preset})
-			style := theme.FullScreenStyle(80, 24)
-
-			if style.GetWidth() != 80 {
-				t.Errorf("expected width 80, got %d", style.GetWidth())
-			}
-			if style.GetHeight() != 24 {
-				t.Errorf("expected height 24, got %d", style.GetHeight())
-			}
-			if style.GetBackground() != theme.Background {
-				t.Errorf("expected background %v, got %v", theme.Background, style.GetBackground())
-			}
-			if style.GetForeground() != theme.Primary {
-				t.Errorf("expected foreground %v, got %v", theme.Primary, style.GetForeground())
-			}
-		})
-	}
-}
-
-func TestBorderStyleIncludesBackground(t *testing.T) {
+func TestPaintScreenCentering(t *testing.T) {
 	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
-	style := theme.BorderStyle()
+	// termWidth=100, contentWidth=60 => leftPad=20
+	output := theme.PaintScreen("hello", 100, 5, 60)
 
-	if style.GetBackground() != theme.Background {
-		t.Errorf("expected BorderStyle background %v, got %v", theme.Background, style.GetBackground())
+	lines := strings.Split(stripANSI(output), "\n")
+	if len(lines) != 5 {
+		t.Errorf("expected 5 lines, got %d", len(lines))
 	}
-	if style.GetForeground() != theme.Primary {
-		t.Errorf("expected BorderStyle foreground %v, got %v", theme.Primary, style.GetForeground())
+	for i, line := range lines {
+		if len(line) < 100 {
+			t.Errorf("line %d: expected min width 100, got %d", i, len(line))
+		}
+	}
+	// First line should have left padding (spaces before "hello")
+	first := stripANSI(lines[0])
+	if !strings.HasPrefix(first, "                    ") { // 20 spaces
+		t.Errorf("expected 20 chars of left padding, got: %q", first[:20])
 	}
 }
 
-func TestViewPaneStyleIncludesBackground(t *testing.T) {
-	theme := ResolveTheme(config.ThemeConfig{Preset: "dracula"})
-	style := theme.ViewPaneStyle()
+func TestPaintScreenFillsHeight(t *testing.T) {
+	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
+	// Content is 2 lines, screen is 10 lines
+	output := theme.PaintScreen("line1\nline2", 40, 10, 40)
 
-	if style.GetBackground() != theme.Background {
-		t.Errorf("expected ViewPaneStyle background %v, got %v", theme.Background, style.GetBackground())
+	lines := strings.Split(stripANSI(output), "\n")
+	if len(lines) != 10 {
+		t.Errorf("expected 10 lines, got %d", len(lines))
+	}
+	// All 10 lines should be at least 40 chars (filled with background)
+	for i, line := range lines {
+		if len(line) < 40 {
+			t.Errorf("line %d: expected min width 40, got %d", i, len(line))
+		}
 	}
 }
 
 func TestAllStylesIncludeBackground(t *testing.T) {
-	// Verify that styles used for full-area rendering include the theme background
 	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
 
 	styles := map[string]lipgloss.Style{
-		"FullScreenStyle": theme.FullScreenStyle(80, 24),
-		"BorderStyle":     theme.BorderStyle(),
-		"ViewPaneStyle":   theme.ViewPaneStyle(),
+		"HelpStyle":     theme.HelpStyle(),
+		"HeaderStyle":   theme.HeaderStyle(),
+		"AccentStyle":   theme.AccentStyle(),
+		"DangerStyle":   theme.DangerStyle(),
+		"BorderStyle":   theme.BorderStyle(),
+		"ViewPaneStyle": theme.ViewPaneStyle(),
 	}
 
 	for name, style := range styles {
 		if style.GetBackground() != theme.Background {
 			t.Errorf("%s: expected background %v, got %v", name, theme.Background, style.GetBackground())
+		}
+	}
+}
+
+func TestBorderStyleIncludesBorderBackground(t *testing.T) {
+	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
+	style := theme.BorderStyle()
+
+	if style.GetBorderBottomBackground() != theme.Background {
+		t.Errorf("expected border background %v, got %v", theme.Background, style.GetBorderBottomBackground())
+	}
+}
+
+func TestListStylesIncludeBackground(t *testing.T) {
+	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
+	s := theme.ListStyles()
+
+	styles := map[string]lipgloss.Style{
+		"FilterPrompt":        s.FilterPrompt,
+		"FilterCursor":        s.FilterCursor,
+		"PaginationStyle":     s.PaginationStyle,
+		"HelpStyle":           s.HelpStyle,
+		"ActivePaginationDot": s.ActivePaginationDot,
+		"NoItems":             s.NoItems,
+	}
+
+	for name, style := range styles {
+		if style.GetBackground() != theme.Background {
+			t.Errorf("ListStyles.%s: expected background %v, got %v", name, theme.Background, style.GetBackground())
 		}
 	}
 }

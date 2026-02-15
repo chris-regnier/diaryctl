@@ -81,17 +81,17 @@ func TestPagerViewPreservesContent(t *testing.T) {
 	}
 }
 
-func TestPagerFullScreenStyleProperties(t *testing.T) {
+func TestPagerPaintScreenDimensions(t *testing.T) {
 	theme := ResolveTheme(config.ThemeConfig{Preset: "catppuccin-mocha"})
-	style := theme.FullScreenStyle(80, 24)
+	output := theme.PaintScreen("test content", 80, 24, 80)
 
-	if style.GetBackground() != theme.Background {
-		t.Errorf("expected background %v, got %v", theme.Background, style.GetBackground())
+	lines := strings.Split(stripANSI(output), "\n")
+	if len(lines) != 24 {
+		t.Errorf("expected 24 lines, got %d", len(lines))
 	}
-	if style.GetWidth() != 80 {
-		t.Errorf("expected width 80, got %d", style.GetWidth())
-	}
-	if style.GetHeight() != 24 {
-		t.Errorf("expected height 24, got %d", style.GetHeight())
+	for i, line := range lines {
+		if len(line) < 80 {
+			t.Errorf("line %d: expected min width 80, got %d", i, len(line))
+		}
 	}
 }

@@ -59,36 +59,17 @@ func (m *pagerModel) contentWidth() int {
 	return m.width
 }
 
-// centerContent centers the given content string horizontally if width > maxWidth.
-func (m *pagerModel) centerContent(content string) string {
-	if m.maxWidth <= 0 || m.width <= m.maxWidth {
-		return content
-	}
-
-	contentWidth := m.maxWidth
-	leftPadding := (m.width - contentWidth) / 2
-
-	if leftPadding <= 0 {
-		return content
-	}
-
-	padding := strings.Repeat(" ", leftPadding)
-	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		lines[i] = padding + line
-	}
-	return strings.Join(lines, "\n")
-}
 
 func (m pagerModel) View() string {
 	if !m.ready {
-		// No full-screen wrapper here: dimensions are unknown until the first WindowSizeMsg.
+		// No PaintScreen here: dimensions are unknown until the first WindowSizeMsg.
 		return "Loading..."
 	}
-	footer := m.theme.HelpStyle().Render("↑/↓ scroll • q quit")
-	paneStyle := m.theme.ViewPaneStyle().Width(m.contentWidth())
-	content := m.centerContent(paneStyle.Render(m.viewport.View()) + "\n" + footer)
-	return m.theme.FullScreenStyle(m.width, m.height).Render(content)
+	cw := m.contentWidth()
+	footer := m.theme.HelpStyle().Width(cw).Render("↑/↓ scroll • q quit")
+	paneStyle := m.theme.ViewPaneStyle().Width(cw)
+	content := paneStyle.Render(m.viewport.View()) + "\n" + footer
+	return m.theme.PaintScreen(content, m.width, m.height, cw)
 }
 
 // PageOutput displays content through a Bubble Tea pager when running in a TTY
