@@ -230,6 +230,35 @@ func TestListStylesIncludeBackground(t *testing.T) {
 	}
 }
 
+func TestBgEscapeCode(t *testing.T) {
+	// 256-color theme (default-dark uses "235")
+	theme256 := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
+	code256 := theme256.bgEscapeCode()
+	if code256 != "\x1b[48;5;235m" {
+		t.Errorf("expected 256-color escape, got %q", code256)
+	}
+
+	// True-color theme (dracula uses "#282A36")
+	themeHex := ResolveTheme(config.ThemeConfig{Preset: "dracula"})
+	codeHex := themeHex.bgEscapeCode()
+	if codeHex != "\x1b[48;2;40;42;54m" {
+		t.Errorf("expected true-color escape, got %q", codeHex)
+	}
+}
+
+func TestPaintScreenIncludesClearEOL(t *testing.T) {
+	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
+	output := theme.PaintScreen("hello", 40, 3, 40)
+
+	// Every line should end with \x1b[K (erase to end of line)
+	lines := strings.Split(output, "\n")
+	for i, line := range lines {
+		if !strings.HasSuffix(line, "\x1b[K") {
+			t.Errorf("line %d: expected to end with \\x1b[K erase sequence", i)
+		}
+	}
+}
+
 func TestResolveThemeBackgroundOverride(t *testing.T) {
 	cfg := config.ThemeConfig{
 		Preset:     "default-dark",

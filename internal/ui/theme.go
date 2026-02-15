@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -172,12 +173,26 @@ func (t Theme) BorderStyle() lipgloss.Style {
 		Foreground(t.Primary)
 }
 
+// bgEscapeCode returns the raw ANSI escape sequence to set the theme's
+// background color, for use with terminal control codes like \x1b[K.
+func (t Theme) bgEscapeCode() string {
+	s := string(t.Background)
+	if strings.HasPrefix(s, "#") && len(s) == 7 {
+		var r, g, b int
+		fmt.Sscanf(s, "#%02x%02x%02x", &r, &g, &b)
+		return fmt.Sprintf("\x1b[48;2;%d;%d;%dm", r, g, b)
+	}
+	return "\x1b[48;5;" + s + "m"
+}
+
 // PaintScreen fills every line to termWidth (with optional centering) and pads
-// vertically to termHeight, using the theme background color. This works by
-// appending background-colored spaces after each line's content, which survives
-// inner ANSI reset codes that would defeat a simple outer-style wrapper.
+// vertically to termHeight, using the theme background color. Each line is
+// padded with background-colored spaces AND a terminal-level \x1b[K (erase to
+// end of line) as a safety net, ensuring the background fills the full terminal
+// width even if lipgloss.Width measurement is slightly off.
 func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth int) string {
 	bgPad := lipgloss.NewStyle().Background(t.Background)
+	clearEOL := t.bgEscapeCode() + "\x1b[K"
 
 	leftPad := 0
 	if contentWidth > 0 && contentWidth < termWidth {
@@ -202,15 +217,29 @@ func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth i
 		if rightPad > 0 {
 			b.WriteString(bgPad.Render(strings.Repeat(" ", rightPad)))
 		}
+		b.WriteString(clearEOL)
 		lines[i] = b.String()
 	}
 
-	emptyLine := bgPad.Render(strings.Repeat(" ", termWidth))
+	emptyLine := bgPad.Render(strings.Repeat(" ", termWidth)) + clearEOL
 	for len(lines) < termHeight {
 		lines = append(lines, emptyLine)
 	}
 
 	return strings.Join(lines[:termHeight], "\n")
+}
+
+// ClearLineEnds appends a terminal-level erase-to-end-of-line (\x1b[K) to
+// every line, ensuring the theme background fills to the right terminal edge.
+// Use this for output produced by lipgloss.Place or similar that may not
+// extend to the full terminal width.
+func (t Theme) ClearLineEnds(content string) string {
+	clearEOL := t.bgEscapeCode() + "\x1b[K"
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		lines[i] = line + clearEOL
+	}
+	return strings.Join(lines, "\n")
 }
 
 // ViewPaneStyle returns a lipgloss style for content view panes with themed background.
