@@ -5,8 +5,8 @@ import (
 )
 
 // stripANSI removes ANSI escape sequences from a string.
-// This is a test utility function used to strip color codes for assertion testing.
+// Handles SGR codes (\x1b[...m), erase codes (\x1b[K), and other CSI sequences.
 func stripANSI(s string) string {
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 	return ansiRegex.ReplaceAllString(s, "")
 }

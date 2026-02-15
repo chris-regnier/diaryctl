@@ -796,14 +796,16 @@ func (m pickerModel) View() string {
 	}
 
 	// Help and template overlays handle their own positioning via lipgloss.Place
-	// with WithWhitespaceBackground, so they return directly.
+	// with WithWhitespaceBackground. ClearLineEnds adds \x1b[K to each line to
+	// guarantee the background fills to the right terminal edge.
 	if m.helpActive {
-		return m.helpOverlay()
+		return m.cfg.Theme.ClearLineEnds(m.helpOverlay())
 	}
 	if m.templatePickerActive {
 		picker := m.templatePickerView()
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, picker,
+		placed := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, picker,
 			lipgloss.WithWhitespaceBackground(m.cfg.Theme.Background))
+		return m.cfg.Theme.ClearLineEnds(placed)
 	}
 
 	cw := m.contentWidth()
