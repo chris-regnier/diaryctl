@@ -164,7 +164,18 @@ func (t Theme) DangerStyle() lipgloss.Style {
 func (t Theme) BorderStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Secondary)
+		BorderForeground(t.Secondary).
+		Background(t.Background).
+		Foreground(t.Primary)
+}
+
+// FullScreenStyle returns a lipgloss style that fills the given dimensions with the theme background.
+func (t Theme) FullScreenStyle(width, height int) lipgloss.Style {
+	return lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		Background(t.Background).
+		Foreground(t.Primary)
 }
 
 // ViewPaneStyle returns a lipgloss style for content view panes with themed background.

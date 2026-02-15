@@ -82,11 +82,13 @@ func (m *pagerModel) centerContent(content string) string {
 
 func (m pagerModel) View() string {
 	if !m.ready {
-		return m.centerContent("Loading...")
+		// No full-screen wrapper here: dimensions are unknown until the first WindowSizeMsg.
+		return "Loading..."
 	}
 	footer := m.theme.HelpStyle().Render("↑/↓ scroll • q quit")
 	paneStyle := m.theme.ViewPaneStyle().Width(m.contentWidth())
-	return m.centerContent(paneStyle.Render(m.viewport.View()) + "\n" + footer)
+	content := m.centerContent(paneStyle.Render(m.viewport.View()) + "\n" + footer)
+	return m.theme.FullScreenStyle(m.width, m.height).Render(content)
 }
 
 // PageOutput displays content through a Bubble Tea pager when running in a TTY
