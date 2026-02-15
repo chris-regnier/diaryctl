@@ -1295,3 +1295,276 @@ func TestJotEmptySubmit(t *testing.T) {
 		t.Error("Empty jot should not return a command")
 	}
 }
+
+// --- Full-screen theme background tests ---
+
+const testWidth = 80
+const testHeight = 24
+
+// assertViewFillsScreen verifies the View() output fills the terminal:
+// - Exact height match (proves vertical filling by the full-screen wrapper)
+// - Minimum width per line (proves horizontal filling; inner content may exceed it)
+func assertViewFillsScreen(t *testing.T, output string, width, height int) {
+	t.Helper()
+	stripped := stripANSI(output)
+	lines := strings.Split(stripped, "\n")
+	if len(lines) != height {
+		t.Errorf("expected %d lines, got %d", height, len(lines))
+	}
+	for i, line := range lines {
+		if len(line) < width {
+			t.Errorf("line %d: expected min width %d, got %d", i, width, len(line))
+		}
+	}
+}
+
+func TestViewFillsScreen_TodayEmpty(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {},
+		},
+		byID: map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", Theme: presets["default-dark"]}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	m = sized.(pickerModel)
+
+	output := m.View()
+	assertViewFillsScreen(t, output, testWidth, testHeight)
+
+	// Verify content is present
+	stripped := stripANSI(output)
+	if !strings.Contains(stripped, "Today") {
+		t.Error("expected 'Today' in output")
+	}
+	if !strings.Contains(stripped, "Nothing yet today") {
+		t.Error("expected empty state text in output")
+	}
+}
+
+func TestViewFillsScreen_TodayWithEntries(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	e1 := entry.Entry{ID: "daily001", Content: "# Today's daily entry\nSome content here.", CreatedAt: today.Add(8 * time.Hour), UpdatedAt: today.Add(8 * time.Hour)}
+	e2 := entry.Entry{ID: "entry002", Content: "Morning note", CreatedAt: today.Add(10 * time.Hour), UpdatedAt: today.Add(10 * time.Hour)}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {e2, e1},
+		},
+		byID: map[string]entry.Entry{
+			"daily001": e1, "entry002": e2,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", Theme: presets["default-dark"]}
+	m := newTUIModel(store, cfg)
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	m = sized.(pickerModel)
+
+	// Load today's entries
+	msg := m.loadTodayCmd()
+	updated, _ := m.Update(msg)
+	m = updated.(pickerModel)
+
+	output := m.View()
+	assertViewFillsScreen(t, output, testWidth, testHeight)
+}
+
+func TestViewFillsScreen_DateList(t *testing.T) {
+	mock, days := makeTestDays()
+	m := newPickerModel(mock, days, presets["default-dark"])
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	m = sized.(pickerModel)
+
+	output := m.View()
+	assertViewFillsScreen(t, output, testWidth, testHeight)
+}
+
+func TestViewFillsScreen_DayDetail(t *testing.T) {
+	mock, days := makeTestDays()
+	m := newPickerModel(mock, days, presets["default-dark"])
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	m = sized.(pickerModel)
+
+	m.dayIdx = 0
+	loaded, _ := m.loadDayDetail()
+	m = loaded.(pickerModel)
+
+	output := m.View()
+	assertViewFillsScreen(t, output, testWidth, testHeight)
+}
+
+func TestViewFillsScreen_EntryDetail(t *testing.T) {
+	mock, days := makeTestDays()
+	m := newPickerModel(mock, days, presets["default-dark"])
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	m = sized.(pickerModel)
+
+	loaded, _ := m.loadEntryDetail("entry002")
+	m = loaded.(pickerModel)
+
+	output := m.View()
+	assertViewFillsScreen(t, output, testWidth, testHeight)
+}
+
+func TestViewFillsScreen_HelpOverlay(t *testing.T) {
+	mock, days := makeTestDays()
+	m := newPickerModel(mock, days, presets["default-dark"])
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	m = sized.(pickerModel)
+
+	m.helpActive = true
+	output := m.View()
+	assertViewFillsScreen(t, output, testWidth, testHeight)
+}
+
+func TestViewFillsScreen_DeletePrompt(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	testEntry := entry.Entry{ID: "entry01", Content: "Test entry", CreatedAt: today, UpdatedAt: today}
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {},
+		},
+		byID: map[string]entry.Entry{
+			"entry01": testEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", Theme: presets["default-dark"]}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	m = sized.(pickerModel)
+
+	m.deleteActive = true
+	m.deleteEntry = testEntry
+
+	output := m.View()
+	assertViewFillsScreen(t, output, testWidth, testHeight)
+
+	stripped := stripANSI(output)
+	if !strings.Contains(stripped, "Delete entry") {
+		t.Error("expected delete prompt text in output")
+	}
+}
+
+func TestViewFillsScreen_JotInput(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {},
+		},
+		byID: map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", Theme: presets["default-dark"]}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	m = sized.(pickerModel)
+
+	started, _ := m.startJot()
+	m = started.(pickerModel)
+
+	output := m.View()
+	assertViewFillsScreen(t, output, testWidth, testHeight)
+}
+
+func TestViewFillsScreen_ContextPanel(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	store := &mockStorage{
+		contexts: []storage.Context{
+			{ID: "ctx01", Name: "work", Source: "manual", CreatedAt: today, UpdatedAt: today},
+		},
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {},
+		},
+		byID:          map[string]entry.Entry{},
+		entryContexts: make(map[string][]string),
+	}
+
+	cfg := TUIConfig{Editor: "vi", Theme: presets["default-dark"]}
+	m := newTUIModel(store, cfg)
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	m = sized.(pickerModel)
+
+	m.screen = screenContextPanel
+	// Load contexts
+	loadResult := m.loadContexts()
+	if loadMsg, ok := loadResult.(contextsLoadedMsg); ok {
+		updated, _ := m.Update(loadMsg)
+		m = updated.(pickerModel)
+	}
+
+	output := m.View()
+	assertViewFillsScreen(t, output, testWidth, testHeight)
+}
+
+func TestViewFillsScreen_AllThemes(t *testing.T) {
+	// Verify that the full-screen wrapping works for all theme presets
+	themeNames := []string{
+		"default-dark", "default-light", "dracula",
+		"ayu-dark", "ayu-light",
+		"catppuccin-mocha", "catppuccin-latte",
+		"gruvbox-dark", "gruvbox-light",
+	}
+
+	for _, name := range themeNames {
+		t.Run(name, func(t *testing.T) {
+			now := time.Now()
+			today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+			store := &mockStorage{
+				entries: map[string][]entry.Entry{
+					today.Format("2006-01-02"): {},
+				},
+				byID: map[string]entry.Entry{},
+			}
+
+			cfg := TUIConfig{Editor: "vi", Theme: presets[name]}
+			m := newTUIModel(store, cfg)
+			m.screen = screenToday
+			sized, _ := m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+			m = sized.(pickerModel)
+
+			output := m.View()
+			assertViewFillsScreen(t, output, testWidth, testHeight)
+		})
+	}
+}
+
+func TestViewFillsScreen_WithMaxWidth(t *testing.T) {
+	// When MaxWidth is set, the output should still fill the full terminal width
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {},
+		},
+		byID: map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", MaxWidth: 60, Theme: presets["default-dark"]}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: testHeight})
+	m = sized.(pickerModel)
+
+	output := m.View()
+	assertViewFillsScreen(t, output, 100, testHeight)
+}
