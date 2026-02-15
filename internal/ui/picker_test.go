@@ -596,7 +596,7 @@ func TestEditorTempFileCleanup(t *testing.T) {
 	store := &mockStorage{
 		entries: map[string][]entry.Entry{},
 		byID: map[string]entry.Entry{
-			"test": entry.Entry{ID: "test", Content: "test content", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+			"test": {ID: "test", Content: "test content", CreatedAt: time.Now(), UpdatedAt: time.Now()},
 		},
 	}
 

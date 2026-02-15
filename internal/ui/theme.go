@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/chris-regnier/diaryctl/internal/config"
@@ -142,22 +144,22 @@ func ResolveTheme(cfg config.ThemeConfig) Theme {
 
 // HelpStyle returns a lipgloss style for help/footer text.
 func (t Theme) HelpStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(t.Muted)
+	return lipgloss.NewStyle().Foreground(t.Muted).Background(t.Background)
 }
 
 // HeaderStyle returns a lipgloss style for headers.
 func (t Theme) HeaderStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(t.Primary)
+	return lipgloss.NewStyle().Bold(true).Foreground(t.Primary).Background(t.Background)
 }
 
 // AccentStyle returns a lipgloss style for accented/focused elements.
 func (t Theme) AccentStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(t.Accent)
+	return lipgloss.NewStyle().Foreground(t.Accent).Background(t.Background)
 }
 
 // DangerStyle returns a lipgloss style for warnings/delete prompts.
 func (t Theme) DangerStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(t.Danger)
+	return lipgloss.NewStyle().Foreground(t.Danger).Background(t.Background)
 }
 
 // BorderStyle returns a lipgloss style with a rounded border using secondary color.
@@ -165,17 +167,50 @@ func (t Theme) BorderStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.Secondary).
+		BorderBackground(t.Background).
 		Background(t.Background).
 		Foreground(t.Primary)
 }
 
-// FullScreenStyle returns a lipgloss style that fills the given dimensions with the theme background.
-func (t Theme) FullScreenStyle(width, height int) lipgloss.Style {
-	return lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Background(t.Background).
-		Foreground(t.Primary)
+// PaintScreen fills every line to termWidth (with optional centering) and pads
+// vertically to termHeight, using the theme background color. This works by
+// appending background-colored spaces after each line's content, which survives
+// inner ANSI reset codes that would defeat a simple outer-style wrapper.
+func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth int) string {
+	bgPad := lipgloss.NewStyle().Background(t.Background)
+
+	leftPad := 0
+	if contentWidth > 0 && contentWidth < termWidth {
+		leftPad = (termWidth - contentWidth) / 2
+	}
+
+	leftStr := ""
+	if leftPad > 0 {
+		leftStr = bgPad.Render(strings.Repeat(" ", leftPad))
+	}
+
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		w := lipgloss.Width(line)
+		rightPad := max(termWidth-leftPad-w, 0)
+
+		var b strings.Builder
+		if leftPad > 0 {
+			b.WriteString(leftStr)
+		}
+		b.WriteString(line)
+		if rightPad > 0 {
+			b.WriteString(bgPad.Render(strings.Repeat(" ", rightPad)))
+		}
+		lines[i] = b.String()
+	}
+
+	emptyLine := bgPad.Render(strings.Repeat(" ", termWidth))
+	for len(lines) < termHeight {
+		lines = append(lines, emptyLine)
+	}
+
+	return strings.Join(lines[:termHeight], "\n")
 }
 
 // ViewPaneStyle returns a lipgloss style for content view panes with themed background.
@@ -228,18 +263,25 @@ func (t Theme) ListStyles() list.Styles {
 	s.TitleBar = lipgloss.NewStyle().
 		Background(t.Background)
 	s.FilterPrompt = lipgloss.NewStyle().
-		Foreground(t.Accent)
+		Foreground(t.Accent).
+		Background(t.Background)
 	s.FilterCursor = lipgloss.NewStyle().
-		Foreground(t.Accent)
+		Foreground(t.Accent).
+		Background(t.Background)
 	s.PaginationStyle = lipgloss.NewStyle().
-		Foreground(t.Muted)
+		Foreground(t.Muted).
+		Background(t.Background)
 	s.HelpStyle = lipgloss.NewStyle().
-		Foreground(t.Muted)
+		Foreground(t.Muted).
+		Background(t.Background)
 	s.ActivePaginationDot = lipgloss.NewStyle().
-		Foreground(t.Accent)
+		Foreground(t.Accent).
+		Background(t.Background)
 	s.InactivePaginationDot = lipgloss.NewStyle().
-		Foreground(t.Muted)
+		Foreground(t.Muted).
+		Background(t.Background)
 	s.NoItems = lipgloss.NewStyle().
-		Foreground(t.Muted)
+		Foreground(t.Muted).
+		Background(t.Background)
 	return s
 }

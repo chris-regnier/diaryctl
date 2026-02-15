@@ -647,10 +647,7 @@ func (m pickerModel) loadEntryDetail(id string) (tea.Model, tea.Cmd) {
 	m.entry = e
 	headerHeight := 4
 	footerHeight := 2
-	vpHeight := m.height - headerHeight - footerHeight
-	if vpHeight < 1 {
-		vpHeight = 1
-	}
+	vpHeight := max(m.height-headerHeight-footerHeight, 1)
 	m.viewport = viewport.New(m.contentWidth(), vpHeight)
 	m.viewport.SetContent(m.formatEntry())
 	m.screen = screenEntryDetail
@@ -692,10 +689,7 @@ func (m *pickerModel) layoutToday() {
 		rendered := RenderMarkdownWithStyle(m.dailyEntry.Content, m.contentWidth(), m.cfg.Theme.MarkdownStyle)
 		m.dailyViewport.SetContent(rendered)
 
-		listHeight := m.height - headerHeight - vpHeight - footerHeight - 1 // 1 for separator
-		if listHeight < 3 {
-			listHeight = 3
-		}
+		listHeight := max(m.height-headerHeight-vpHeight-footerHeight-1, 3) // 1 for separator
 		m.todayList.SetSize(m.contentWidth(), listHeight)
 	} else {
 		m.todayList.SetSize(m.contentWidth(), m.height-headerHeight-footerHeight)
@@ -710,26 +704,6 @@ func (m *pickerModel) contentWidth() int {
 	return m.width
 }
 
-// centerContent centers the given content string horizontally if width > MaxWidth.
-func (m *pickerModel) centerContent(content string) string {
-	if m.cfg.MaxWidth <= 0 || m.width <= m.cfg.MaxWidth {
-		return content
-	}
-
-	contentWidth := m.cfg.MaxWidth
-	leftPadding := (m.width - contentWidth) / 2
-
-	if leftPadding <= 0 {
-		return content
-	}
-
-	padding := strings.Repeat(" ", leftPadding)
-	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		lines[i] = padding + line
-	}
-	return strings.Join(lines, "\n")
-}
 
 type todayLoadedMsg struct {
 	daily   *entry.Entry
@@ -817,103 +791,104 @@ func (m pickerModel) loadDateList() (tea.Model, tea.Cmd) {
 
 func (m pickerModel) View() string {
 	if !m.ready {
-		// No full-screen wrapper here: dimensions are unknown until the first WindowSizeMsg.
+		// No PaintScreen here: dimensions are unknown until the first WindowSizeMsg.
 		return "Loading..."
 	}
 
-	fullScreen := m.cfg.Theme.FullScreenStyle(m.width, m.height)
-
-	var result string
-
+	// Help and template overlays handle their own positioning via lipgloss.Place
+	// with WithWhitespaceBackground, so they return directly.
 	if m.helpActive {
-		result = m.helpOverlay()
-	} else if m.templatePickerActive {
+		return m.helpOverlay()
+	}
+	if m.templatePickerActive {
 		picker := m.templatePickerView()
-		result = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, picker)
-	} else {
-		switch m.screen {
-		case screenToday:
-			if m.dailyEntry == nil && len(m.todayEntries) == 0 {
-				// Empty state
-				header := m.cfg.Theme.HeaderStyle().Render(
-					fmt.Sprintf("Today — %s", time.Now().Format("2006-01-02")))
-				empty := "\nNothing yet today.\n\n  j  jot a quick note\n  c  create a new entry\n"
-				footer := m.cfg.Theme.HelpStyle().Render("j jot  c create  b browse  x ctx  ? help")
-				result = header + empty + "\n" + footer
-			} else {
-				var sections []string
-
-				// Header
-				count := len(m.todayEntries)
-				if m.dailyEntry != nil {
-					count++
-				}
-				label := "entries"
-				if count == 1 {
-					label = "entry"
-				}
-				header := m.cfg.Theme.HeaderStyle().Render(
-					fmt.Sprintf("Today — %s    %d %s", time.Now().Format("2006-01-02"), count, label))
-				sections = append(sections, header)
-
-				// Daily entry viewport
-				if m.dailyEntry != nil {
-					paneStyle := m.cfg.Theme.ViewPaneStyle().Width(m.contentWidth())
-					sections = append(sections, paneStyle.Render(m.dailyViewport.View()))
-				}
-
-				// Other entries list
-				if len(m.todayEntries) > 0 {
-					sections = append(sections, m.todayList.View())
-				}
-
-				// Footer
-				footer := m.cfg.Theme.HelpStyle().Render("j jot  c create  e edit  b browse  x ctx  ? help")
-				sections = append(sections, footer)
-
-				result = strings.Join(sections, "\n")
-			}
-		case screenDateList:
-			footer := m.cfg.Theme.HelpStyle().Render("↑/↓ navigate • enter select • q quit")
-			result = m.dateList.View() + "\n" + footer
-		case screenDayDetail:
-			footer := m.cfg.Theme.HelpStyle().Render("↑/↓ navigate • enter select • ←/p prev day • →/n next day • esc back • q quit")
-			result = m.dayList.View() + "\n" + footer
-		case screenEntryDetail:
-			header := m.cfg.Theme.HeaderStyle().Render(fmt.Sprintf("Entry: %s", m.entry.ID))
-			meta := m.cfg.Theme.HelpStyle().Render(fmt.Sprintf("Created: %s  Modified: %s",
-				m.entry.CreatedAt.Local().Format("2006-01-02 15:04"),
-				m.entry.UpdatedAt.Local().Format("2006-01-02 15:04")))
-			footer := m.cfg.Theme.HelpStyle().Render("↑/↓ scroll • esc back • q quit")
-			paneStyle := m.cfg.Theme.ViewPaneStyle().Width(m.contentWidth())
-			result = header + "\n" + meta + "\n\n" + paneStyle.Render(m.viewport.View()) + "\n" + footer
-		case screenContextPanel:
-			var b strings.Builder
-			b.WriteString(m.contextList.View())
-			if m.contextCreating {
-				b.WriteString("\n" + m.contextInput.View())
-			} else {
-				hint := "enter toggle  n new  / filter  esc close"
-				if m.contextEntryID == "" {
-					hint = "n new  / filter  esc close"
-				}
-				b.WriteString("\n" + m.cfg.Theme.HelpStyle().Render(hint))
-			}
-			result = b.String()
-		}
-
-		if m.deleteActive {
-			prompt := fmt.Sprintf("Delete entry %s? [y/N] ", m.deleteEntry.ID)
-			warningStyle := m.cfg.Theme.DangerStyle()
-			result = result + "\n" + warningStyle.Render(prompt)
-		} else if m.jotActive {
-			result = result + "\n" + m.jotInput.View()
-		}
-
-		result = m.centerContent(result)
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, picker,
+			lipgloss.WithWhitespaceBackground(m.cfg.Theme.Background))
 	}
 
-	return fullScreen.Render(result)
+	cw := m.contentWidth()
+	var result string
+
+	switch m.screen {
+	case screenToday:
+		if m.dailyEntry == nil && len(m.todayEntries) == 0 {
+			// Empty state
+			header := m.cfg.Theme.HeaderStyle().Width(cw).Render(
+				fmt.Sprintf("Today — %s", time.Now().Format("2006-01-02")))
+			empty := m.cfg.Theme.ViewPaneStyle().Width(cw).Render(
+				"Nothing yet today.\n\n  j  jot a quick note\n  c  create a new entry")
+			footer := m.cfg.Theme.HelpStyle().Width(cw).Render("j jot  c create  b browse  x ctx  ? help")
+			result = header + "\n" + empty + "\n" + footer
+		} else {
+			var sections []string
+
+			// Header
+			count := len(m.todayEntries)
+			if m.dailyEntry != nil {
+				count++
+			}
+			label := "entries"
+			if count == 1 {
+				label = "entry"
+			}
+			header := m.cfg.Theme.HeaderStyle().Width(cw).Render(
+				fmt.Sprintf("Today — %s    %d %s", time.Now().Format("2006-01-02"), count, label))
+			sections = append(sections, header)
+
+			// Daily entry viewport
+			if m.dailyEntry != nil {
+				paneStyle := m.cfg.Theme.ViewPaneStyle().Width(cw)
+				sections = append(sections, paneStyle.Render(m.dailyViewport.View()))
+			}
+
+			// Other entries list
+			if len(m.todayEntries) > 0 {
+				sections = append(sections, m.todayList.View())
+			}
+
+			// Footer
+			footer := m.cfg.Theme.HelpStyle().Width(cw).Render("j jot  c create  e edit  b browse  x ctx  ? help")
+			sections = append(sections, footer)
+
+			result = strings.Join(sections, "\n")
+		}
+	case screenDateList:
+		footer := m.cfg.Theme.HelpStyle().Width(cw).Render("↑/↓ navigate • enter select • q quit")
+		result = m.dateList.View() + "\n" + footer
+	case screenDayDetail:
+		footer := m.cfg.Theme.HelpStyle().Width(cw).Render("↑/↓ navigate • enter select • ←/p prev day • →/n next day • esc back • q quit")
+		result = m.dayList.View() + "\n" + footer
+	case screenEntryDetail:
+		header := m.cfg.Theme.HeaderStyle().Width(cw).Render(fmt.Sprintf("Entry: %s", m.entry.ID))
+		meta := m.cfg.Theme.HelpStyle().Width(cw).Render(fmt.Sprintf("Created: %s  Modified: %s",
+			m.entry.CreatedAt.Local().Format("2006-01-02 15:04"),
+			m.entry.UpdatedAt.Local().Format("2006-01-02 15:04")))
+		footer := m.cfg.Theme.HelpStyle().Width(cw).Render("↑/↓ scroll • esc back • q quit")
+		paneStyle := m.cfg.Theme.ViewPaneStyle().Width(cw)
+		result = header + "\n" + meta + "\n\n" + paneStyle.Render(m.viewport.View()) + "\n" + footer
+	case screenContextPanel:
+		var b strings.Builder
+		b.WriteString(m.contextList.View())
+		if m.contextCreating {
+			b.WriteString("\n" + m.contextInput.View())
+		} else {
+			hint := "enter toggle  n new  / filter  esc close"
+			if m.contextEntryID == "" {
+				hint = "n new  / filter  esc close"
+			}
+			b.WriteString("\n" + m.cfg.Theme.HelpStyle().Width(cw).Render(hint))
+		}
+		result = b.String()
+	}
+
+	if m.deleteActive {
+		prompt := fmt.Sprintf("Delete entry %s? [y/N] ", m.deleteEntry.ID)
+		result = result + "\n" + m.cfg.Theme.DangerStyle().Width(cw).Render(prompt)
+	} else if m.jotActive {
+		result = result + "\n" + m.jotInput.View()
+	}
+
+	return m.cfg.Theme.PaintScreen(result, m.width, m.height, cw)
 }
 
 func (m pickerModel) helpOverlay() string {
@@ -938,7 +913,8 @@ Actions
   x          context panel
 
   q          quit     ? close help`)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, help)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, help,
+		lipgloss.WithWhitespaceBackground(m.cfg.Theme.Background))
 }
 
 func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
@@ -948,13 +924,7 @@ func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
 	ta.CharLimit = maxJotInputLength
 	ta.SetWidth(m.contentWidth() - 4)
 	// Dynamic height: use 25% of screen height or max 5 lines
-	height := m.height / 4
-	if height > 5 {
-		height = 5
-	}
-	if height < 3 {
-		height = 3
-	}
+	height := max(min(m.height/4, 5), 3)
 	ta.SetHeight(height)
 	ta.ShowLineNumbers = false
 	m.jotInput = ta
