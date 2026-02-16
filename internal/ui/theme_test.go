@@ -270,6 +270,39 @@ func TestPaintScreenIncludesBgEscapes(t *testing.T) {
 	}
 }
 
+func TestPaintScreenPatchesSGRResets(t *testing.T) {
+	theme := ResolveTheme(config.ThemeConfig{Preset: "dracula"})
+	bgCode := theme.bgEscapeCode()
+
+	// Simulate content with embedded SGR resets (as lipgloss/glamour produce)
+	content := "\x1b[1mBold\x1b[0m plain \x1b[32mGreen\x1b[0m end"
+	output := theme.PaintScreen(content, 60, 3, 60)
+
+	// After patching, no bare \x1b[0m should remain — every reset must be
+	// immediately followed by the bg escape to prevent terminal bleed-through.
+	if strings.Contains(output, "\x1b[0m") && !strings.Contains(output, "\x1b[0m"+bgCode) {
+		t.Error("PaintScreen must replace all bare \\x1b[0m with \\x1b[0m + setBg")
+	}
+	// Verify no bare resets exist (every \x1b[0m is followed by bgCode)
+	bare := strings.ReplaceAll(output, "\x1b[0m"+bgCode, "")
+	if strings.Contains(bare, "\x1b[0m") {
+		t.Error("found bare \\x1b[0m not followed by bg escape")
+	}
+}
+
+func TestClearLineEndsPatchesSGRResets(t *testing.T) {
+	theme := ResolveTheme(config.ThemeConfig{Preset: "catppuccin-mocha"})
+	bgCode := theme.bgEscapeCode()
+
+	content := "styled \x1b[0m unstyled"
+	output := theme.ClearLineEnds(content)
+
+	bare := strings.ReplaceAll(output, "\x1b[0m"+bgCode, "")
+	if strings.Contains(bare, "\x1b[0m") {
+		t.Error("ClearLineEnds must replace all bare \\x1b[0m with \\x1b[0m + setBg")
+	}
+}
+
 func TestResolveThemeBackgroundOverride(t *testing.T) {
 	cfg := config.ThemeConfig{
 		Preset:     "default-dark",

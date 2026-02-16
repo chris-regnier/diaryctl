@@ -185,21 +185,29 @@ func (t Theme) bgEscapeCode() string {
 	return "\x1b[48;5;" + s + "m"
 }
 
+// sgrReset is the ANSI SGR full-reset sequence that lipgloss, glamour, and
+// Bubble Tea components emit throughout their output.
+const sgrReset = "\x1b[0m"
+
 // PaintScreen fills every line to termWidth (with optional centering) and pads
 // vertically to termHeight, using the theme background color.
 //
-// The strategy works WITH Bubble Tea's renderer rather than against it:
-// each line ends with a raw SGR background-set escape (\x1b[48;...m) so that
-// the renderer's own \x1b[K] (erase-to-end-of-line, appended to lines shorter
-// than the terminal width) fills the remaining space with our themed background
-// instead of the terminal default. Explicit space-padding is also applied as a
-// best-effort fill for the content area.
+// Two complementary strategies ensure no terminal background bleeds through:
+//
+//  1. Every \x1b[0m (SGR reset) emitted by lipgloss / glamour / Bubble Tea
+//     components is replaced with \x1b[0m + <setBg>, so the theme background
+//     is re-established immediately after every reset — even mid-line.
+//
+//  2. Each line is left/right-padded with raw spaces under the active setBg
+//     so the background extends to both terminal edges.
 func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth int) string {
-	// Raw ANSI approach: set bg via SGR escape, then write raw spaces.
-	// Unlike lipgloss.Render() which appends \x1b[0m (resetting bg to
-	// terminal default), raw SGR + spaces keeps the bg color active so
-	// the renderer's own \x1b[K] (appended to short lines) also uses it.
 	setBg := t.bgEscapeCode()
+
+	// Replace every SGR full-reset with reset + re-establish background.
+	// This is the key fix: components like lipgloss emit \x1b[0m between
+	// styled spans, which would otherwise revert to the terminal's default
+	// background for any subsequent unstyled text or whitespace.
+	content = strings.ReplaceAll(content, sgrReset, sgrReset+setBg)
 
 	leftPad := 0
 	if contentWidth > 0 && contentWidth < termWidth {
@@ -217,11 +225,11 @@ func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth i
 		rightPad := max(termWidth-leftPad-w, 0)
 
 		var b strings.Builder
-		b.WriteString(setBg)                          // set bg at start of line
-		b.WriteString(leftStr)                        // raw spaces (bg active)
-		b.WriteString(line)                           // content (may reset bg)
-		b.WriteString(setBg)                          // re-establish bg after content
-		b.WriteString(strings.Repeat(" ", rightPad))  // raw right-pad spaces (bg active)
+		b.WriteString(setBg)                         // set bg at start of line
+		b.WriteString(leftStr)                       // raw spaces (bg active)
+		b.WriteString(line)                          // content (resets already patched)
+		b.WriteString(setBg)                         // re-establish bg after content
+		b.WriteString(strings.Repeat(" ", rightPad)) // raw right-pad spaces (bg active)
 		lines[i] = b.String()
 	}
 
@@ -234,12 +242,11 @@ func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth i
 	return strings.Join(lines[:termHeight], "\n")
 }
 
-// ClearLineEnds sets the theme background at the start and end of every line
-// so that the renderer's \x1b[K] fills remaining space with our color, and
-// any line-initial whitespace also uses the themed background.
-// Use this for output produced by lipgloss.Place or similar.
+// ClearLineEnds patches SGR resets and wraps each line with the theme
+// background, ensuring overlays (help, template picker) have no bleed-through.
 func (t Theme) ClearLineEnds(content string) string {
 	setBg := t.bgEscapeCode()
+	content = strings.ReplaceAll(content, sgrReset, sgrReset+setBg)
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
 		lines[i] = setBg + line + setBg
