@@ -74,7 +74,12 @@ var templateCreateCmd = &cobra.Command{
 	Long: `Create a new template with the given name.
 
 If "-" is provided as content, it is read from stdin.
-Otherwise, your editor is opened.`,
+Otherwise, your editor is opened.
+
+Template variables use Go text/template syntax: {{.varname}}
+Variable names must start with a letter (e.g. {{.first}}, not {{.0}}).
+For example, a template with "Hello {{.name}}" will substitute the
+value of the "name" variable when rendered.`,
 	Example: `  diaryctl template create daily
   echo "# Daily Entry" | diaryctl template create daily -`,
 	Args: cobra.RangeArgs(1, 2),
