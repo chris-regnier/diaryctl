@@ -246,17 +246,26 @@ func TestBgEscapeCode(t *testing.T) {
 	}
 }
 
-func TestPaintScreenIncludesBgSuffix(t *testing.T) {
+func TestPaintScreenIncludesBgEscapes(t *testing.T) {
 	theme := ResolveTheme(config.ThemeConfig{Preset: "default-dark"})
 	output := theme.PaintScreen("hello", 40, 3, 40)
 	bgCode := theme.bgEscapeCode()
 
-	// Every line should end with the bg SGR escape so the renderer's
-	// \x1b[K] fills remaining space with our themed background.
+	// Every line should start with the bg SGR escape (raw ANSI, no
+	// lipgloss resets) so the background color is active throughout.
 	lines := strings.Split(output, "\n")
 	for i, line := range lines {
-		if !strings.HasSuffix(line, bgCode) {
-			t.Errorf("line %d: expected to end with bg escape %q", i, bgCode)
+		if !strings.HasPrefix(line, bgCode) {
+			t.Errorf("line %d: expected to start with bg escape %q", i, bgCode)
+		}
+		// Content lines should also contain a second setBg after content
+		// to re-establish bg after lipgloss resets.
+		if strings.Contains(line, "hello") {
+			idx := strings.Index(line, "hello")
+			after := line[idx+len("hello"):]
+			if !strings.Contains(after, bgCode) {
+				t.Errorf("line %d: expected bg escape after content", i)
+			}
 		}
 	}
 }

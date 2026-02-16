@@ -195,8 +195,11 @@ func (t Theme) bgEscapeCode() string {
 // instead of the terminal default. Explicit space-padding is also applied as a
 // best-effort fill for the content area.
 func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth int) string {
-	bgPad := lipgloss.NewStyle().Background(t.Background)
-	setBg := t.bgEscapeCode() // raw SGR: sets bg so renderer's \x1b[K] uses our color
+	// Raw ANSI approach: set bg via SGR escape, then write raw spaces.
+	// Unlike lipgloss.Render() which appends \x1b[0m (resetting bg to
+	// terminal default), raw SGR + spaces keeps the bg color active so
+	// the renderer's own \x1b[K] (appended to short lines) also uses it.
+	setBg := t.bgEscapeCode()
 
 	leftPad := 0
 	if contentWidth > 0 && contentWidth < termWidth {
@@ -205,7 +208,7 @@ func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth i
 
 	leftStr := ""
 	if leftPad > 0 {
-		leftStr = bgPad.Render(strings.Repeat(" ", leftPad))
+		leftStr = strings.Repeat(" ", leftPad)
 	}
 
 	lines := strings.Split(content, "\n")
@@ -214,20 +217,16 @@ func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth i
 		rightPad := max(termWidth-leftPad-w, 0)
 
 		var b strings.Builder
-		if leftPad > 0 {
-			b.WriteString(leftStr)
-		}
-		b.WriteString(line)
-		if rightPad > 0 {
-			b.WriteString(bgPad.Render(strings.Repeat(" ", rightPad)))
-		}
-		b.WriteString(setBg) // ensure renderer's \x1b[K] uses our bg
+		b.WriteString(setBg)                          // set bg at start of line
+		b.WriteString(leftStr)                        // raw spaces (bg active)
+		b.WriteString(line)                           // content (may reset bg)
+		b.WriteString(setBg)                          // re-establish bg after content
+		b.WriteString(strings.Repeat(" ", rightPad))  // raw right-pad spaces (bg active)
 		lines[i] = b.String()
 	}
 
-	// Empty lines: explicit space-padding (best-effort) + bg SGR suffix so
-	// the renderer's \x1b[K] also fills any remaining gap with our color.
-	emptyLine := bgPad.Render(strings.Repeat(" ", termWidth)) + setBg
+	// Empty lines: setBg + full-width spaces keeps bg active throughout.
+	emptyLine := setBg + strings.Repeat(" ", termWidth)
 	for len(lines) < termHeight {
 		lines = append(lines, emptyLine)
 	}
@@ -235,14 +234,15 @@ func (t Theme) PaintScreen(content string, termWidth, termHeight, contentWidth i
 	return strings.Join(lines[:termHeight], "\n")
 }
 
-// ClearLineEnds sets the theme background at the end of every line so that
-// Bubble Tea's renderer fills remaining space with \x1b[K] using our color.
+// ClearLineEnds sets the theme background at the start and end of every line
+// so that the renderer's \x1b[K] fills remaining space with our color, and
+// any line-initial whitespace also uses the themed background.
 // Use this for output produced by lipgloss.Place or similar.
 func (t Theme) ClearLineEnds(content string) string {
 	setBg := t.bgEscapeCode()
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
-		lines[i] = line + setBg
+		lines[i] = setBg + line + setBg
 	}
 	return strings.Join(lines, "\n")
 }
