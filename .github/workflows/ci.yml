@@ -137,14 +137,26 @@ jobs:
         run: |
           /tmp/gavel_Linux_x86_64 analyze \
             --diff /tmp/pr.diff \
-            --output /tmp/gavel-results \
-            | tee /tmp/verdict.json
+            --output /tmp/gavel-results
 
       - name: Evaluate verdict
         if: env.SKIP_ANALYSIS != 'true'
         run: |
-          DECISION=$(jq -r '.decision' /tmp/verdict.json)
-          REASON=$(jq -r '.reason // "No reason provided"' /tmp/verdict.json)
+          # Find the latest result directory (Gavel creates timestamped subdirs)
+          RESULT_DIR=$(ls -td /tmp/gavel-results/*/ 2>/dev/null | head -1)
+          if [ -z "$RESULT_DIR" ]; then
+            echo "::error::No Gavel results found"
+            exit 1
+          fi
+
+          VERDICT_FILE="${RESULT_DIR}verdict.json"
+          if [ ! -f "$VERDICT_FILE" ]; then
+            echo "::error::No verdict.json found in ${RESULT_DIR}"
+            exit 1
+          fi
+
+          DECISION=$(jq -r '.decision' "$VERDICT_FILE")
+          REASON=$(jq -r '.reason // "No reason provided"' "$VERDICT_FILE")
 
           echo "## Gavel Verdict" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -155,16 +167,30 @@ jobs:
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "### Relevant Findings" >> "$GITHUB_STEP_SUMMARY"
             jq -r '.relevant_findings[]? | "- **\(.ruleId // "unknown")** (\(.level // "note")): \(.message.text // "No message")"' \
-              /tmp/verdict.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+              "$VERDICT_FILE" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
             echo "::error::Gavel rejected this PR: ${REASON}"
             exit 1
           fi
 
           echo "Gavel decision: ${DECISION}"
 
+      - name: Prepare SARIF for upload
+        if: always() && env.SKIP_ANALYSIS != 'true'
+        run: |
+          # Find the SARIF file in the nested result directory
+          RESULT_DIR=$(ls -td /tmp/gavel-results/*/ 2>/dev/null | head -1)
+          if [ -n "$RESULT_DIR" ] && [ -f "${RESULT_DIR}sarif.json" ]; then
+            # Copy to a known location with .sarif extension for upload action
+            mkdir -p /tmp/sarif-upload
+            cp "${RESULT_DIR}sarif.json" /tmp/sarif-upload/results.sarif
+            echo "SARIF_FILE=/tmp/sarif-upload/results.sarif" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No SARIF file found to upload"
+          fi
+
       - name: Upload SARIF to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v4
-        if: always() && env.SKIP_ANALYSIS != 'true'
+        if: always() && env.SKIP_ANALYSIS != 'true' && env.SARIF_FILE != ''
         with:
-          sarif_file: /tmp/gavel-results/
+          sarif_file: ${{ env.SARIF_FILE }}
           category: gavel
