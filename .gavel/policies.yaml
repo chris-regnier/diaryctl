@@ -1,9 +1,48 @@
 provider:
-  name: openrouter
-  openrouter:
-    model: anthropic/claude-haiku-4-5
-
+    name: openrouter
+    # name: ollama
+    ollama:
+        model: "qwen2.5-coder:7b"
+        base_url: "http://localhost:11434/v1"
+    openrouter:
+        model: anthropic/claude-haiku-4-5
+    anthropic:
+        model: ""
+    bedrock:
+        model: ""
+        region: ""
+    openai:
+        model: ""
+persona: code-reviewer
 policies:
-  shall-be-merged:
-    enabled: true
-    severity: error
+    code_smells_and_maintainability:
+        description: Identify code smells that impact maintainability and readability
+        severity: warning
+        instruction: 'Flag significant code smells such as: overly complex methods with high cyclomatic complexity, duplicate code blocks, inappropriate coupling between classes, violation of single responsibility principle, god objects, dead code, magic numbers with unclear purpose. Focus on issues that make code hard to understand or maintain, not cosmetic formatting.'
+        enabled: true
+    critical_bugs_and_errors:
+        description: Detect critical bugs, logic errors, and potential runtime failures
+        severity: error
+        instruction: 'Identify critical bugs including: null pointer dereferences, array bounds violations, unhandled exceptions, infinite loops, race conditions, memory leaks, incorrect logic that could cause data corruption or crashes. Focus on code that will fail at runtime or produce incorrect results. Ignore minor style issues.'
+        enabled: true
+    security_vulnerabilities:
+        description: Detect obvious security vulnerabilities and unsafe practices
+        severity: error
+        instruction: 'Identify security issues including: SQL injection vulnerabilities, XSS vulnerabilities, insecure data handling, hardcoded credentials or secrets, unsafe deserialization, improper input validation, directory traversal vulnerabilities, insecure random number generation, improper authentication or authorization checks. Focus on clear security flaws that could be exploited.'
+        enabled: true
+    test_quality_and_coverage:
+        description: Assess test quality, coverage gaps, and testing best practices
+        severity: warning
+        instruction: 'Evaluate test suites for: missing test coverage of critical code paths, tests that don''t actually verify expected behavior, brittle tests that test implementation details rather than behavior, missing edge case testing, inadequate error condition testing, tests with unclear assertions. Identify areas where additional testing would catch potential bugs.'
+        enabled: true
+lsp:
+    watcher:
+        debounce_duration: ""
+        watch_patterns: []
+        ignore_patterns: []
+    analysis:
+        parallel_files: 0
+        priority: ""
+    cache:
+        ttl: ""
+        max_size_mb: 0
