@@ -888,7 +888,8 @@ func (m pickerModel) View() string {
 		prompt := fmt.Sprintf("Delete entry %s? [y/N] ", m.deleteEntry.ID)
 		result = result + "\n" + m.cfg.Theme.DangerStyle().Width(cw).Render(prompt)
 	} else if m.jotActive {
-		result = result + "\n" + m.jotInput.View()
+		label := m.cfg.Theme.HelpStyle().Width(cw).Render(m.jotTargetLabel())
+		result = result + "\n" + label + "\n" + m.jotInput.View()
 	}
 
 	return m.cfg.Theme.PaintScreen(result, m.width, m.height, cw)
@@ -918,6 +919,18 @@ Actions
   q          quit     ? close help`)
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, help,
 		lipgloss.WithWhitespaceBackground(m.cfg.Theme.Background))
+}
+
+// jotTargetLabel returns a short label describing the current jot target.
+func (m pickerModel) jotTargetLabel() string {
+	if m.jotTarget == nil {
+		return "Jotting into: new entry"
+	}
+	preview := strings.SplitN(m.jotTarget.Content, "\n", 2)[0]
+	if len(preview) > 40 {
+		preview = preview[:37] + "..."
+	}
+	return fmt.Sprintf("Jotting into: %s", preview)
 }
 
 func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
