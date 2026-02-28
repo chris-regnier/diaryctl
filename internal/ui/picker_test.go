@@ -1806,3 +1806,48 @@ func TestJotIntoSelectedEntry_DayDetail(t *testing.T) {
 		t.Error("Jot should NOT have been appended to daily entry")
 	}
 }
+
+func TestJotTargetIndicator(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	otherEntry := entry.Entry{
+		ID:        "other01",
+		Content:   "# Meeting Notes\n\nSome notes",
+		CreatedAt: today.Add(10 * time.Hour),
+		UpdatedAt: today.Add(10 * time.Hour),
+	}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {otherEntry},
+		},
+		byID: map[string]entry.Entry{
+			"other01": otherEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: "", Theme: presets["default-dark"]}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	m.todayFocus = focusEntryList
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	// Set up entry list
+	items := []list.Item{entryItem{entry: otherEntry}}
+	m.todayList = list.New(items, list.NewDefaultDelegate(), 80, 20)
+
+	// Start jot — target should be otherEntry
+	started, _ := m.startJot()
+	m = started.(pickerModel)
+
+	view := m.View()
+	stripped := stripANSI(view)
+	if !strings.Contains(stripped, "Jotting into:") {
+		t.Error("Expected 'Jotting into:' indicator in view")
+	}
+	if !strings.Contains(stripped, "Meeting Notes") {
+		t.Error("Expected target entry preview in jot indicator")
+	}
+}
