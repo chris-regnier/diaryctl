@@ -910,7 +910,7 @@ func (m pickerModel) helpOverlay() string {
   tab        switch focus (today)
 
 Actions
-  j          jot a note (^J for newline)
+  j          jot into selected entry (^J for newline)
   c          create new entry (with templates)
   e          edit selected entry
   t          append template to entry
