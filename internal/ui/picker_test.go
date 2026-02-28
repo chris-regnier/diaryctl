@@ -697,6 +697,7 @@ func TestJotActionAppendsToExistingEntry(t *testing.T) {
 	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
 	m := newTUIModel(store, cfg)
 	m.screen = screenToday
+	m.dailyEntry = &existingEntry
 	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = sized.(pickerModel)
 
@@ -1105,6 +1106,7 @@ func TestJotMultiline(t *testing.T) {
 	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
 	m := newTUIModel(store, cfg)
 	m.screen = screenToday
+	m.dailyEntry = &dailyEntry
 	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = sized.(pickerModel)
 
@@ -1733,5 +1735,74 @@ func TestResolveJotTarget_DateListReturnsNil(t *testing.T) {
 	target := m.resolveJotTarget()
 	if target != nil {
 		t.Errorf("Expected nil target for date list, got %+v", target)
+	}
+}
+
+func TestJotIntoSelectedEntry_DayDetail(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	dailyEntry := entry.Entry{
+		ID:        "daily01",
+		Content:   "# Daily\n\nDaily content",
+		CreatedAt: today.Add(8 * time.Hour),
+		UpdatedAt: today.Add(8 * time.Hour),
+	}
+	otherEntry := entry.Entry{
+		ID:        "other01",
+		Content:   "# Meeting Notes\n\nSome notes",
+		CreatedAt: today.Add(10 * time.Hour),
+		UpdatedAt: today.Add(10 * time.Hour),
+	}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {otherEntry, dailyEntry},
+		},
+		byID: map[string]entry.Entry{
+			"daily01": dailyEntry,
+			"other01": otherEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenDayDetail
+
+	// Set up day list BEFORE resize to avoid nil delegate panic
+	items := []list.Item{entryItem{entry: otherEntry}, entryItem{entry: dailyEntry}}
+	m.dayList = list.New(items, list.NewDefaultDelegate(), 80, 20)
+
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	// Start jot — should resolve target to otherEntry
+	started, _ := m.startJot()
+	m = started.(pickerModel)
+	m.jotInput.SetValue("Action item from meeting")
+
+	// Submit
+	updatedModel, cmd := m.updateJotInput(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updatedModel.(pickerModel)
+
+	if cmd == nil {
+		t.Fatal("Expected jot command")
+	}
+
+	result := cmd()
+	if jotMsg, ok := result.(jotCompleteMsg); ok {
+		if jotMsg.err != nil {
+			t.Fatalf("Jot failed: %v", jotMsg.err)
+		}
+	}
+
+	// Verify the jot went to other01, not daily01
+	updated := store.byID["other01"]
+	if !strings.Contains(updated.Content, "Action item from meeting") {
+		t.Errorf("Expected jot in other01, content: %s", updated.Content)
+	}
+	daily := store.byID["daily01"]
+	if strings.Contains(daily.Content, "Action item from meeting") {
+		t.Error("Jot should NOT have been appended to daily entry")
 	}
 }
