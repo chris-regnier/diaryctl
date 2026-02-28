@@ -1851,3 +1851,47 @@ func TestJotTargetIndicator(t *testing.T) {
 		t.Error("Expected target entry preview in jot indicator")
 	}
 }
+
+func TestJotFromEntryDetail_RefreshesEntry(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	viewedEntry := entry.Entry{
+		ID:        "viewed01",
+		Content:   "# Viewed Entry\n\nOriginal content",
+		CreatedAt: today.Add(10 * time.Hour),
+		UpdatedAt: today.Add(10 * time.Hour),
+	}
+
+	// Store has an updated version of the entry (simulating post-jot state)
+	updatedEntry := viewedEntry
+	updatedEntry.Content = "# Viewed Entry\n\nOriginal content\n- **14:00** new jot"
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {updatedEntry},
+		},
+		byID: map[string]entry.Entry{
+			"viewed01": updatedEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenEntryDetail
+	m.entry = viewedEntry // model has the OLD version
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	// Simulate jot complete — should reload entry from store
+	updated, _ := m.Update(jotCompleteMsg{})
+	m = updated.(pickerModel)
+
+	// Model's entry should now have the updated content from store
+	if !strings.Contains(m.entry.Content, "new jot") {
+		t.Errorf("Expected entry to be refreshed with new content, got: %s", m.entry.Content)
+	}
+	if m.screen != screenEntryDetail {
+		t.Errorf("Expected to stay on screenEntryDetail, got screen %d", m.screen)
+	}
+}
