@@ -1895,3 +1895,75 @@ func TestJotFromEntryDetail_RefreshesEntry(t *testing.T) {
 		t.Errorf("Expected to stay on screenEntryDetail, got screen %d", m.screen)
 	}
 }
+
+func TestJotIntoSelectedEntry_TodayScreen(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	dailyEntry := entry.Entry{
+		ID:        "daily01",
+		Content:   "# Daily\n\nDaily content",
+		CreatedAt: today.Add(8 * time.Hour),
+		UpdatedAt: today.Add(8 * time.Hour),
+	}
+	otherEntry := entry.Entry{
+		ID:        "other01",
+		Content:   "# Side Notes",
+		CreatedAt: today.Add(10 * time.Hour),
+		UpdatedAt: today.Add(10 * time.Hour),
+	}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {otherEntry, dailyEntry},
+		},
+		byID: map[string]entry.Entry{
+			"daily01": dailyEntry,
+			"other01": otherEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	m.dailyEntry = &dailyEntry
+	m.todayFocus = focusEntryList
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	// Set up entry list with other entry selected
+	items := []list.Item{entryItem{entry: otherEntry}}
+	m.todayList = list.New(items, list.NewDefaultDelegate(), 80, 20)
+
+	// Start jot
+	started, _ := m.startJot()
+	m = started.(pickerModel)
+	m.jotInput.SetValue("Quick thought")
+
+	// Submit
+	updatedModel, cmd := m.updateJotInput(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updatedModel.(pickerModel)
+
+	if cmd == nil {
+		t.Fatal("Expected jot command")
+	}
+
+	result := cmd()
+	if jotMsg, ok := result.(jotCompleteMsg); ok {
+		if jotMsg.err != nil {
+			t.Fatalf("Jot failed: %v", jotMsg.err)
+		}
+	}
+
+	// Verify jot went to other01
+	updated := store.byID["other01"]
+	if !strings.Contains(updated.Content, "Quick thought") {
+		t.Errorf("Expected jot in other01, content: %s", updated.Content)
+	}
+
+	// Verify daily was NOT modified
+	daily := store.byID["daily01"]
+	if strings.Contains(daily.Content, "Quick thought") {
+		t.Error("Jot should NOT have gone to daily entry")
+	}
+}
