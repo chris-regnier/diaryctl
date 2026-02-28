@@ -160,6 +160,7 @@ type pickerModel struct {
 	// Jot mode
 	jotInput  textarea.Model
 	jotActive bool
+	jotTarget *entry.Entry // entry to append jot to (nil = create new daily)
 	// Delete confirmation mode
 	deleteActive bool
 	deleteEntry  entry.Entry
@@ -920,6 +921,8 @@ Actions
 }
 
 func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
+	m.jotTarget = m.resolveJotTarget()
+
 	ta := textarea.New()
 	ta.Placeholder = "jot (^J=newline ↵=submit)..."
 	ta.Focus()
@@ -932,6 +935,31 @@ func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
 	m.jotInput = ta
 	m.jotActive = true
 	return m, textarea.Blink
+}
+
+// resolveJotTarget determines which entry to jot into based on the current screen
+// and selection state. Returns nil if no target exists (will create new daily entry).
+func (m pickerModel) resolveJotTarget() *entry.Entry {
+	switch m.screen {
+	case screenToday:
+		if m.todayFocus == focusEntryList {
+			if item, ok := m.todayList.SelectedItem().(entryItem); ok {
+				e := item.entry
+				return &e
+			}
+		}
+		return m.dailyEntry
+	case screenDayDetail:
+		if item, ok := m.dayList.SelectedItem().(entryItem); ok {
+			e := item.entry
+			return &e
+		}
+		return nil
+	case screenEntryDetail:
+		return &m.entry
+	default:
+		return nil
+	}
 }
 
 func (m pickerModel) updateJotInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1386,46 +1414,41 @@ func (m pickerModel) doEditWithEditor(entryID string, content string, refs []ent
 
 func (m pickerModel) doJot(content string) tea.Msg {
 	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
-
-	// Get all today's entries (single fetch)
-	entries, err := m.store.List(storage.ListOptions{Date: &today})
-	if err != nil {
-		return jotCompleteMsg{err: err}
-	}
-
 	timestamp := now.Format("15:04")
 	jotLine := fmt.Sprintf("- **%s** %s", timestamp, content)
 
-	if len(entries) > 0 {
-		// Append to existing daily entry (oldest)
-		daily := entries[len(entries)-1]
+	if m.jotTarget != nil {
+		// Append to the targeted entry
+		target, err := m.store.Get(m.jotTarget.ID)
+		if err != nil {
+			return jotCompleteMsg{err: fmt.Errorf("jot target not found: %w", err)}
+		}
+
 		var newContent string
-		if strings.TrimSpace(daily.Content) == "" {
+		if strings.TrimSpace(target.Content) == "" {
 			newContent = jotLine
 		} else {
-			newContent = daily.Content + "\n" + jotLine
+			newContent = target.Content + "\n" + jotLine
 		}
-		_, err = m.store.Update(daily.ID, newContent, nil)
+		_, err = m.store.Update(target.ID, newContent, nil)
 		if err != nil {
 			return jotCompleteMsg{err: err}
 		}
 	} else {
-		// Create new daily entry with template
+		// No target — create new daily entry (screenToday with no entries)
 		id, err := entry.NewID()
 		if err != nil {
 			return jotCompleteMsg{err: err}
 		}
 		nowUTC := now.UTC()
 
-		// Use default template if configured - look up full TemplateRef
+		// Use default template if configured
 		var templateRefs []entry.TemplateRef
 		if m.cfg.DefaultTemplate != "" {
 			names := template.ParseNames(m.cfg.DefaultTemplate)
 			_, refs, err := template.Compose(m.store, names)
 			if err != nil {
-				// Warn but continue - match CLI behavior (can't print to stderr in tea.Msg)
-				// Just proceed without template refs
+				// Continue without template refs (match CLI behavior)
 			} else {
 				templateRefs = refs
 			}

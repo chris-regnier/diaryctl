@@ -104,11 +104,11 @@ jobs:
 
       - name: Get PR diff
         run: |
-          git diff origin/${{ github.base_ref }}...HEAD > /tmp/pr.diff
+          git diff origin/${{ github.base_ref }}...HEAD -- '*.go' > /tmp/pr.diff
           echo "--- Diff stats ---"
           wc -l /tmp/pr.diff
           if [ ! -s /tmp/pr.diff ]; then
-            echo "Empty diff, skipping analysis"
+            echo "No Go file changes, skipping analysis"
             echo "SKIP_ANALYSIS=true" >> "$GITHUB_ENV"
           fi
 
