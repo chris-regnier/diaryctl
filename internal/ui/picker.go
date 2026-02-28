@@ -591,11 +591,18 @@ func (m pickerModel) updateEntryDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "esc", "backspace":
-		m.screen = screenDayDetail
-		if m.ready {
-			m.dayList.SetSize(m.contentWidth(), m.height-2)
+		m.screen = m.prevScreen
+		switch m.prevScreen {
+		case screenToday:
+			return m, m.loadTodayCmd
+		case screenDayDetail:
+			if m.ready {
+				m.dayList.SetSize(m.contentWidth(), m.height-2)
+			}
+			return m, nil
+		default:
+			return m, nil
 		}
-		return m, nil
 	case "e":
 		return m.startEdit(m.entry)
 	case "d":
@@ -648,6 +655,7 @@ func (m pickerModel) loadEntryDetail(id string) (tea.Model, tea.Cmd) {
 	}
 
 	m.entry = e
+	m.prevScreen = m.screen
 	headerHeight := 4
 	footerHeight := 2
 	vpHeight := max(m.height-headerHeight-footerHeight, 1)
