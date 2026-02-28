@@ -1606,3 +1606,132 @@ func TestResolveJotTarget_DayDetailSelectedEntry(t *testing.T) {
 		t.Errorf("Expected target ID 'target01', got '%s'", target.ID)
 	}
 }
+
+func TestResolveJotTarget_TodayDefaultsToDaily(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	dailyEntry := entry.Entry{
+		ID:        "daily01",
+		Content:   "# Daily\n\nContent",
+		CreatedAt: today.Add(8 * time.Hour),
+		UpdatedAt: today.Add(8 * time.Hour),
+	}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:   map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	m.dailyEntry = &dailyEntry
+	m.todayFocus = focusDailyViewport
+
+	target := m.resolveJotTarget()
+	if target == nil {
+		t.Fatal("Expected daily entry as target, got nil")
+	}
+	if target.ID != "daily01" {
+		t.Errorf("Expected target ID 'daily01', got '%s'", target.ID)
+	}
+}
+
+func TestResolveJotTarget_TodaySelectedEntry(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	dailyEntry := entry.Entry{
+		ID:        "daily01",
+		Content:   "# Daily",
+		CreatedAt: today.Add(8 * time.Hour),
+		UpdatedAt: today.Add(8 * time.Hour),
+	}
+	otherEntry := entry.Entry{
+		ID:        "other01",
+		Content:   "# Other entry",
+		CreatedAt: today.Add(10 * time.Hour),
+		UpdatedAt: today.Add(10 * time.Hour),
+	}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:   map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	m.dailyEntry = &dailyEntry
+	m.todayFocus = focusEntryList
+	items := []list.Item{entryItem{entry: otherEntry}}
+	m.todayList = list.New(items, list.NewDefaultDelegate(), 80, 20)
+
+	target := m.resolveJotTarget()
+	if target == nil {
+		t.Fatal("Expected selected entry as target, got nil")
+	}
+	if target.ID != "other01" {
+		t.Errorf("Expected target ID 'other01', got '%s'", target.ID)
+	}
+}
+
+func TestResolveJotTarget_EntryDetail(t *testing.T) {
+	viewedEntry := entry.Entry{
+		ID:      "viewed01",
+		Content: "# Viewed Entry",
+	}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:   map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenEntryDetail
+	m.entry = viewedEntry
+
+	target := m.resolveJotTarget()
+	if target == nil {
+		t.Fatal("Expected viewed entry as target, got nil")
+	}
+	if target.ID != "viewed01" {
+		t.Errorf("Expected target ID 'viewed01', got '%s'", target.ID)
+	}
+}
+
+func TestResolveJotTarget_TodayNoEntries(t *testing.T) {
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:   map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenToday
+	m.dailyEntry = nil
+	m.todayFocus = focusDailyViewport
+
+	target := m.resolveJotTarget()
+	if target != nil {
+		t.Errorf("Expected nil target for empty today, got %+v", target)
+	}
+}
+
+func TestResolveJotTarget_DateListReturnsNil(t *testing.T) {
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:   map[string]entry.Entry{},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenDateList
+
+	target := m.resolveJotTarget()
+	if target != nil {
+		t.Errorf("Expected nil target for date list, got %+v", target)
+	}
+}
