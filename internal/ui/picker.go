@@ -232,6 +232,8 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenDayDetail:
 			// Reload day detail by reinitializing on current screen
 			return m.loadDayDetail()
+		case screenEntryDetail:
+			return m.loadEntryDetail(m.entry.ID)
 		default:
 			return m, nil
 		}
