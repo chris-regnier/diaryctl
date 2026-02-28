@@ -939,7 +939,7 @@ func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
 
 // resolveJotTarget determines which entry to jot into based on the current screen
 // and selection state. Returns nil if no target exists (will create new daily entry).
-func (m *pickerModel) resolveJotTarget() *entry.Entry {
+func (m pickerModel) resolveJotTarget() *entry.Entry {
 	switch m.screen {
 	case screenToday:
 		if m.todayFocus == focusEntryList {
