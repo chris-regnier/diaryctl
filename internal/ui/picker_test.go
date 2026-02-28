@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/chris-regnier/diaryctl/internal/entry"
 	"github.com/chris-regnier/diaryctl/internal/storage"
 )
@@ -1567,4 +1568,41 @@ func TestViewFillsScreen_WithMaxWidth(t *testing.T) {
 
 	output := m.View()
 	assertViewFillsScreen(t, output, 100, testHeight)
+}
+
+func TestResolveJotTarget_DayDetailSelectedEntry(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	targetEntry := entry.Entry{
+		ID:        "target01",
+		Content:   "# Target Entry\n\nSome content",
+		CreatedAt: today.Add(10 * time.Hour),
+		UpdatedAt: today.Add(10 * time.Hour),
+	}
+
+	store := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {targetEntry},
+		},
+		byID: map[string]entry.Entry{
+			"target01": targetEntry,
+		},
+	}
+
+	cfg := TUIConfig{Editor: "vi", DefaultTemplate: ""}
+	m := newTUIModel(store, cfg)
+	m.screen = screenDayDetail
+
+	// Set up day list with the target entry selected
+	items := []list.Item{entryItem{entry: targetEntry}}
+	m.dayList = list.New(items, list.NewDefaultDelegate(), 80, 20)
+
+	target := m.resolveJotTarget()
+	if target == nil {
+		t.Fatal("Expected jot target, got nil")
+	}
+	if target.ID != "target01" {
+		t.Errorf("Expected target ID 'target01', got '%s'", target.ID)
+	}
 }

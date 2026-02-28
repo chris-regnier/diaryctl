@@ -160,6 +160,7 @@ type pickerModel struct {
 	// Jot mode
 	jotInput  textarea.Model
 	jotActive bool
+	jotTarget *entry.Entry // entry to append jot to (nil = create new daily)
 	// Delete confirmation mode
 	deleteActive bool
 	deleteEntry  entry.Entry
@@ -932,6 +933,31 @@ func (m pickerModel) startJot() (tea.Model, tea.Cmd) {
 	m.jotInput = ta
 	m.jotActive = true
 	return m, textarea.Blink
+}
+
+// resolveJotTarget determines which entry to jot into based on the current screen
+// and selection state. Returns nil if no target exists (will create new daily entry).
+func (m *pickerModel) resolveJotTarget() *entry.Entry {
+	switch m.screen {
+	case screenToday:
+		if m.todayFocus == focusEntryList {
+			if item, ok := m.todayList.SelectedItem().(entryItem); ok {
+				e := item.entry
+				return &e
+			}
+		}
+		return m.dailyEntry
+	case screenDayDetail:
+		if item, ok := m.dayList.SelectedItem().(entryItem); ok {
+			e := item.entry
+			return &e
+		}
+		return nil
+	case screenEntryDetail:
+		return &m.entry
+	default:
+		return nil
+	}
 }
 
 func (m pickerModel) updateJotInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
