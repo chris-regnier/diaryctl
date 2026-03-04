@@ -1502,6 +1502,10 @@ func (m pickerModel) doJot(content string) tea.Msg {
 		if err != nil {
 			return jotCompleteMsg{err: err}
 		}
+		contextRefs := m.resolveContexts()
+		for _, ref := range contextRefs {
+			_ = m.store.AttachContext(m.jotTarget.ID, ref.ContextID)
+		}
 	} else {
 		// No target — create new daily entry (screenToday with no entries)
 		id, err := entry.NewID()
@@ -1531,6 +1535,10 @@ func (m pickerModel) doJot(content string) tea.Msg {
 		}
 		if err := m.store.Create(e); err != nil {
 			return jotCompleteMsg{err: err}
+		}
+		contextRefs := m.resolveContexts()
+		for _, ref := range contextRefs {
+			_ = m.store.AttachContext(e.ID, ref.ContextID)
 		}
 	}
 

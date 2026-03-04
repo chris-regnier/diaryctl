@@ -2009,3 +2009,57 @@ func TestResolveContextsForTUI(t *testing.T) {
 		t.Errorf("context = %q, want test-ctx", refs[0].ContextName)
 	}
 }
+
+func TestDoJotAttachesContexts(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	existingEntry := entry.Entry{
+		ID:        "entry001",
+		Content:   "# Today",
+		CreatedAt: today.Add(8 * time.Hour),
+		UpdatedAt: today.Add(8 * time.Hour),
+	}
+
+	ctx1 := storage.Context{
+		ID:     "ctx001",
+		Name:   "test-jot-ctx",
+		Source: "manual",
+	}
+
+	mock := &mockStorage{
+		entries: map[string][]entry.Entry{
+			today.Format("2006-01-02"): {existingEntry},
+		},
+		byID:     map[string]entry.Entry{"entry001": existingEntry},
+		contexts: []storage.Context{ctx1},
+	}
+
+	dataDir := t.TempDir()
+	cfg := TUIConfig{
+		Editor:           "vi",
+		DataDir:          dataDir,
+		ContextResolvers: []string{},
+	}
+	m := newTUIModel(mock, cfg)
+	m.jotTarget = &existingEntry
+
+	context.SetManualContext(dataDir, "test-jot-ctx")
+
+	msg := m.doJot("test note")
+	jotMsg, ok := msg.(jotCompleteMsg)
+	if !ok {
+		t.Fatalf("expected jotCompleteMsg, got %T", msg)
+	}
+	if jotMsg.err != nil {
+		t.Fatalf("jot error: %v", jotMsg.err)
+	}
+
+	attached := mock.entryContexts["entry001"]
+	if len(attached) != 1 {
+		t.Fatalf("expected 1 attached context, got %d", len(attached))
+	}
+	if attached[0] != "ctx001" {
+		t.Errorf("attached context ID = %q, want ctx001", attached[0])
+	}
+}
