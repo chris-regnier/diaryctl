@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/chris-regnier/diaryctl/internal/config"
+	"github.com/chris-regnier/diaryctl/internal/context"
 	"github.com/chris-regnier/diaryctl/internal/daily"
+	"github.com/chris-regnier/diaryctl/internal/storage"
 )
 
 func TestTodayShowsExistingEntry(t *testing.T) {
@@ -113,5 +115,45 @@ func TestTodayContentOnly(t *testing.T) {
 	output := strings.TrimSpace(buf.String())
 	if output != strings.TrimSpace(e.Content) {
 		t.Errorf("expected content %q, got %q", e.Content, output)
+	}
+}
+
+func TestTodayAttachesContexts(t *testing.T) {
+	s := setupTestStore(t)
+	store = s
+	appConfig = &config.Config{}
+	appConfig.DataDir = t.TempDir()
+	appConfig.ContextResolvers = []string{}
+
+	ctx := storage.Context{
+		ID:        "ctx001",
+		Name:      "daily-work",
+		Source:    "manual",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := s.CreateContext(ctx); err != nil {
+		t.Fatalf("CreateContext: %v", err)
+	}
+	if err := context.SetManualContext(appConfig.DataDir, "daily-work"); err != nil {
+		t.Fatalf("SetManualContext: %v", err)
+	}
+
+	var buf bytes.Buffer
+	err := todayRun(&buf, false, false)
+	if err != nil {
+		t.Fatalf("todayRun: %v", err)
+	}
+
+	e, _, _ := daily.GetOrCreateToday(s, "")
+	got, err := s.Get(e.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.Contexts) != 1 {
+		t.Fatalf("expected 1 context, got %d", len(got.Contexts))
+	}
+	if got.Contexts[0].ContextName != "daily-work" {
+		t.Errorf("context = %q, want daily-work", got.Contexts[0].ContextName)
 	}
 }

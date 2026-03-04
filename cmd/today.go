@@ -43,6 +43,12 @@ func todayRun(w io.Writer, idOnly bool, contentOnly bool) error {
 		return fmt.Errorf("getting today's entry: %w", err)
 	}
 
+	// Resolve and attach contexts
+	contextRefs := resolveContexts()
+	for _, ref := range contextRefs {
+		_ = store.AttachContext(e.ID, ref.ContextID)
+	}
+
 	if jsonOutput {
 		return ui.FormatJSON(w, e)
 	}
@@ -67,6 +73,12 @@ func todayEditRun() error {
 	e, _, err := daily.GetOrCreateToday(store, appConfig.DefaultTemplate)
 	if err != nil {
 		return fmt.Errorf("getting today's entry: %w", err)
+	}
+
+	// Resolve and attach contexts
+	contextRefs := resolveContexts()
+	for _, ref := range contextRefs {
+		_ = store.AttachContext(e.ID, ref.ContextID)
 	}
 
 	editorCmd := editor.ResolveEditor(appConfig.Editor)
