@@ -63,10 +63,13 @@ var rootCmd = &cobra.Command{
 			return todayRun(os.Stdout, false, false)
 		}
 		return ui.RunTUI(store, ui.TUIConfig{
-			Editor:          editor.ResolveEditor(appConfig.Editor),
-			DefaultTemplate: appConfig.DefaultTemplate,
-			MaxWidth:        appConfig.MaxWidth,
-			Theme:           ui.ResolveTheme(appConfig.Theme),
+			Editor:           editor.ResolveEditor(appConfig.Editor),
+			DefaultTemplate:  appConfig.DefaultTemplate,
+			MaxWidth:         appConfig.MaxWidth,
+			Theme:            ui.ResolveTheme(appConfig.Theme),
+			ContextProviders: appConfig.ContextProviders,
+			ContextResolvers: appConfig.ContextResolvers,
+			DataDir:          appConfig.DataDir,
 		})
 	},
 }

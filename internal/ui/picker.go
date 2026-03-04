@@ -57,6 +57,7 @@ type StorageProvider interface {
 	// Context
 	ListContexts() ([]storage.Context, error)
 	CreateContext(c storage.Context) error
+	GetContextByName(name string) (storage.Context, error)
 	AttachContext(entryID string, contextID string) error
 	DetachContext(entryID string, contextID string) error
 
@@ -1551,10 +1552,13 @@ func (m pickerModel) startEdit(e entry.Entry) (tea.Model, tea.Cmd) {
 
 // TUIConfig holds configuration needed by the TUI.
 type TUIConfig struct {
-	Editor          string // resolved editor command
-	DefaultTemplate string // default template name
-	MaxWidth        int    // maximum viewport width (0 = no limit)
-	Theme           Theme  // resolved theme
+	Editor           string   // resolved editor command
+	DefaultTemplate  string   // default template name
+	MaxWidth         int      // maximum viewport width (0 = no limit)
+	Theme            Theme    // resolved theme
+	ContextProviders []string // content provider names from config
+	ContextResolvers []string // context resolver names from config
+	DataDir          string   // data directory for manual contexts state
 }
 
 // newTUIModel creates a new TUI model starting at the today screen.

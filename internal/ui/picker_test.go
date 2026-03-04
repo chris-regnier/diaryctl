@@ -123,6 +123,15 @@ func (m *mockStorage) CreateContext(c storage.Context) error {
 	return nil
 }
 
+func (m *mockStorage) GetContextByName(name string) (storage.Context, error) {
+	for _, c := range m.contexts {
+		if c.Name == name {
+			return c, nil
+		}
+	}
+	return storage.Context{}, storage.ErrNotFound
+}
+
 func (m *mockStorage) AttachContext(entryID string, contextID string) error {
 	if m.attachError != nil {
 		return m.attachError
