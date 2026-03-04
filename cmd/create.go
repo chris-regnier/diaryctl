@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	ctxpkg "github.com/chris-regnier/diaryctl/internal/context"
 	"github.com/chris-regnier/diaryctl/internal/editor"
 	"github.com/chris-regnier/diaryctl/internal/entry"
 	tmpl "github.com/chris-regnier/diaryctl/internal/template"
@@ -87,11 +88,15 @@ Use --no-template to skip the default template.`,
 				}
 			}
 
+			// Compose content from providers and template
+			providers := buildContentProviders(appConfig.ContextProviders)
+			editorContent := ctxpkg.ComposeContent(providers, templateContent)
+
 			// Open editor
 			editorCmd := editor.ResolveEditor(appConfig.Editor)
 			var err error
 			var changed bool
-			content, changed, err = editor.Edit(editorCmd, templateContent)
+			content, changed, err = editor.Edit(editorCmd, editorContent)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Editor error:", err)
 				os.Exit(3)
@@ -115,6 +120,9 @@ Use --no-template to skip the default template.`,
 			os.Exit(2)
 		}
 
+		// Resolve active contexts
+		contextRefs := resolveContexts()
+
 		now := time.Now().UTC()
 		e := entry.Entry{
 			ID:        id,
@@ -122,6 +130,7 @@ Use --no-template to skip the default template.`,
 			CreatedAt: now,
 			UpdatedAt: now,
 			Templates: templateRefs,
+			Contexts:  contextRefs,
 		}
 
 		if err := store.Create(e); err != nil {

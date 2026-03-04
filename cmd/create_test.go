@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chris-regnier/diaryctl/internal/context"
 	"github.com/chris-regnier/diaryctl/internal/entry"
 	"github.com/chris-regnier/diaryctl/internal/storage"
 	tmpl "github.com/chris-regnier/diaryctl/internal/template"
@@ -189,5 +190,52 @@ func TestCreateDefaultTemplateMisconfigured(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), storage.ErrNotFound.Error()) {
 		t.Errorf("expected ErrNotFound in error, got: %v", err)
+	}
+}
+
+func TestCreateInlineWithContextResolution(t *testing.T) {
+	setupTestEnv(t)
+	appConfig.DataDir = t.TempDir()
+	appConfig.ContextResolvers = []string{}
+
+	ctx := storage.Context{
+		ID:        "ctx001",
+		Name:      "test-context",
+		Source:    "manual",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := store.CreateContext(ctx); err != nil {
+		t.Fatalf("CreateContext: %v", err)
+	}
+
+	if err := context.SetManualContext(appConfig.DataDir, "test-context"); err != nil {
+		t.Fatalf("SetManualContext: %v", err)
+	}
+
+	id, _ := entry.NewID()
+	now := time.Now().UTC()
+	refs := resolveContexts()
+
+	e := entry.Entry{
+		ID:        id,
+		Content:   "Entry with context",
+		CreatedAt: now,
+		UpdatedAt: now,
+		Contexts:  refs,
+	}
+	if err := store.Create(e); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := store.Get(id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.Contexts) != 1 {
+		t.Fatalf("expected 1 context ref, got %d", len(got.Contexts))
+	}
+	if got.Contexts[0].ContextName != "test-context" {
+		t.Errorf("context name = %q, want %q", got.Contexts[0].ContextName, "test-context")
 	}
 }
