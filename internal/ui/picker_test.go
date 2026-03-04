@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/chris-regnier/diaryctl/internal/context"
 	"github.com/chris-regnier/diaryctl/internal/entry"
 	"github.com/chris-regnier/diaryctl/internal/storage"
 )
@@ -1974,5 +1975,37 @@ func TestJotIntoSelectedEntry_TodayScreen(t *testing.T) {
 	daily := store.byID["daily01"]
 	if strings.Contains(daily.Content, "Quick thought") {
 		t.Error("Jot should NOT have gone to daily entry")
+	}
+}
+
+func TestResolveContextsForTUI(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+
+	ctx1 := storage.Context{
+		ID:     "ctx001",
+		Name:   "test-ctx",
+		Source: "manual",
+	}
+	mock := &mockStorage{
+		entries:  map[string][]entry.Entry{today.Format("2006-01-02"): {}},
+		byID:     map[string]entry.Entry{},
+		contexts: []storage.Context{ctx1},
+	}
+
+	cfg := TUIConfig{
+		Editor:           "vi",
+		DataDir:          t.TempDir(),
+		ContextResolvers: []string{},
+	}
+	m := newTUIModel(mock, cfg)
+
+	context.SetManualContext(cfg.DataDir, "test-ctx")
+	refs := m.resolveContexts()
+	if len(refs) != 1 {
+		t.Fatalf("expected 1 context ref, got %d", len(refs))
+	}
+	if refs[0].ContextName != "test-ctx" {
+		t.Errorf("context = %q, want test-ctx", refs[0].ContextName)
 	}
 }

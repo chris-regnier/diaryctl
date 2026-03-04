@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	dctx "github.com/chris-regnier/diaryctl/internal/context"
 	"github.com/chris-regnier/diaryctl/internal/editor"
 	"github.com/chris-regnier/diaryctl/internal/entry"
 	"github.com/chris-regnier/diaryctl/internal/storage"
@@ -1319,6 +1320,41 @@ func appendTemplatesCallback(m *pickerModel, names []string) tea.Cmd {
 	}
 }
 
+// resolveContexts resolves active contexts for the TUI using config.
+func (m pickerModel) resolveContexts() []entry.ContextRef {
+	resolvers := buildTUIContextResolvers(m.cfg.ContextResolvers)
+	manual, err := dctx.LoadManualContexts(m.cfg.DataDir)
+	if err != nil {
+		manual = nil
+	}
+	refs, _ := dctx.ResolveActiveContexts(resolvers, manual, m.store)
+	return refs
+}
+
+// buildTUIContentProviders creates ContentProviders from config names.
+func buildTUIContentProviders(names []string) []dctx.ContentProvider {
+	var providers []dctx.ContentProvider
+	for _, name := range names {
+		p := dctx.LookupContentProvider(name)
+		if p != nil {
+			providers = append(providers, p)
+		}
+	}
+	return providers
+}
+
+// buildTUIContextResolvers creates ContextResolvers from config names.
+func buildTUIContextResolvers(names []string) []dctx.ContextResolver {
+	var resolvers []dctx.ContextResolver
+	for _, name := range names {
+		r := dctx.LookupContextResolver(name)
+		if r != nil {
+			resolvers = append(resolvers, r)
+		}
+	}
+	return resolvers
+}
+
 func (m pickerModel) doCreateWithEditor(initialContent string, refs []entry.TemplateRef) (tea.Model, tea.Cmd) {
 	editorCmd := editor.ResolveEditor(m.cfg.Editor)
 	parts := strings.Fields(editorCmd)
@@ -1333,8 +1369,11 @@ func (m pickerModel) doCreateWithEditor(initialContent string, refs []entry.Temp
 	}
 	tmpName := tmpFile.Name()
 
-	if initialContent != "" {
-		if _, err := tmpFile.WriteString(initialContent); err != nil {
+	providers := buildTUIContentProviders(m.cfg.ContextProviders)
+	composedContent := dctx.ComposeContent(providers, initialContent)
+
+	if composedContent != "" {
+		if _, err := tmpFile.WriteString(composedContent); err != nil {
 			tmpFile.Close()
 			os.Remove(tmpName)
 			m.err = fmt.Errorf("failed to write to temp file: %w", err)
@@ -1351,6 +1390,7 @@ func (m pickerModel) doCreateWithEditor(initialContent string, refs []entry.Temp
 	cmdArgs := append(parts[1:], tmpName)
 	c := exec.Command(parts[0], cmdArgs...)
 	templateRefs := refs
+	contextRefs := m.resolveContexts()
 
 	return m, tea.ExecProcess(c, func(err error) tea.Msg {
 		defer os.Remove(tmpName)
@@ -1376,9 +1416,13 @@ func (m pickerModel) doCreateWithEditor(initialContent string, refs []entry.Temp
 			CreatedAt: now,
 			UpdatedAt: now,
 			Templates: templateRefs,
+			Contexts:  contextRefs,
 		}
 		if err := m.store.Create(e); err != nil {
 			return editorFinishedMsg{err: err}
+		}
+		for _, ref := range contextRefs {
+			_ = m.store.AttachContext(e.ID, ref.ContextID)
 		}
 		return editorFinishedMsg{}
 	})
