@@ -2063,3 +2063,67 @@ func TestDoJotAttachesContexts(t *testing.T) {
 		t.Errorf("attached context ID = %q, want ctx001", attached[0])
 	}
 }
+
+func TestFormatEntryShowsContexts(t *testing.T) {
+	now := time.Now()
+	e := entry.Entry{
+		ID:        "entry001",
+		Content:   "Hello world",
+		CreatedAt: now,
+		UpdatedAt: now,
+		Contexts: []entry.ContextRef{
+			{ContextID: "ctx001", ContextName: "feature/auth"},
+			{ContextID: "ctx002", ContextName: "sprint-5"},
+		},
+	}
+
+	mock := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:    map[string]entry.Entry{"entry001": e},
+	}
+
+	cfg := TUIConfig{Editor: "vi", Theme: presets["default-dark"]}
+	m := newTUIModel(mock, cfg)
+	m.entry = e
+
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	output := m.formatEntry()
+	if !strings.Contains(output, "Contexts:") {
+		t.Error("expected 'Contexts:' in formatted entry")
+	}
+	if !strings.Contains(output, "feature/auth") {
+		t.Error("expected 'feature/auth' in formatted entry")
+	}
+	if !strings.Contains(output, "sprint-5") {
+		t.Error("expected 'sprint-5' in formatted entry")
+	}
+}
+
+func TestFormatEntryNoContextsOmitsLine(t *testing.T) {
+	now := time.Now()
+	e := entry.Entry{
+		ID:        "entry001",
+		Content:   "Hello world",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	mock := &mockStorage{
+		entries: map[string][]entry.Entry{},
+		byID:    map[string]entry.Entry{"entry001": e},
+	}
+
+	cfg := TUIConfig{Editor: "vi"}
+	m := newTUIModel(mock, cfg)
+	m.entry = e
+
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(pickerModel)
+
+	output := m.formatEntry()
+	if strings.Contains(output, "Contexts:") {
+		t.Error("should not show 'Contexts:' when no contexts are attached")
+	}
+}
