@@ -1,5 +1,9 @@
 package context
 
+// TODO: Wire CompositeProvider into the application layer (cmd/root.go or TUI)
+// to enable MCP-backed context search and filter capabilities.
+// See: docs/plans/2026-03-03-context-wiring-design.md
+
 import (
 	"context"
 
