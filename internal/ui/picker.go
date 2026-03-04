@@ -672,6 +672,13 @@ func (m pickerModel) formatEntry() string {
 	fmt.Fprintf(&b, "Entry: %s\n", m.entry.ID)
 	fmt.Fprintf(&b, "Created: %s\n", m.entry.CreatedAt.Local().Format("2006-01-02 15:04"))
 	fmt.Fprintf(&b, "Modified: %s\n", m.entry.UpdatedAt.Local().Format("2006-01-02 15:04"))
+	if len(m.entry.Contexts) > 0 {
+		names := make([]string, len(m.entry.Contexts))
+		for i, ref := range m.entry.Contexts {
+			names[i] = ref.ContextName
+		}
+		fmt.Fprintf(&b, "Contexts: %s\n", strings.Join(names, ", "))
+	}
 	fmt.Fprintln(&b)
 
 	// Render markdown content as rich text
