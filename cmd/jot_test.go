@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chris-regnier/diaryctl/internal/config"
+	"github.com/chris-regnier/diaryctl/internal/context"
 	"github.com/chris-regnier/diaryctl/internal/daily"
 	"github.com/chris-regnier/diaryctl/internal/entry"
 	"github.com/chris-regnier/diaryctl/internal/storage"
@@ -181,5 +182,92 @@ func TestJotJSONOutput(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "test note") {
 		t.Error("expected jot content in JSON")
+	}
+}
+
+func TestJotAttachesContextsToNewEntry(t *testing.T) {
+	s := setupTestStore(t)
+	store = s
+	appConfig = &config.Config{}
+	appConfig.DataDir = t.TempDir()
+	appConfig.ContextResolvers = []string{}
+
+	ctx := storage.Context{
+		ID:        "ctx001",
+		Name:      "sprint-1",
+		Source:    "manual",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := s.CreateContext(ctx); err != nil {
+		t.Fatalf("CreateContext: %v", err)
+	}
+	if err := context.SetManualContext(appConfig.DataDir, "sprint-1"); err != nil {
+		t.Fatalf("SetManualContext: %v", err)
+	}
+
+	err := jotRun(io.Discard, "hello", "")
+	if err != nil {
+		t.Fatalf("jotRun: %v", err)
+	}
+
+	e, _, err := daily.GetOrCreateToday(s, "")
+	if err != nil {
+		t.Fatalf("GetOrCreateToday: %v", err)
+	}
+
+	got, err := s.Get(e.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.Contexts) != 1 {
+		t.Fatalf("expected 1 context, got %d", len(got.Contexts))
+	}
+	if got.Contexts[0].ContextName != "sprint-1" {
+		t.Errorf("context = %q, want sprint-1", got.Contexts[0].ContextName)
+	}
+}
+
+func TestJotAttachesContextsToExistingEntry(t *testing.T) {
+	s := setupTestStore(t)
+	store = s
+	appConfig = &config.Config{}
+	appConfig.DataDir = t.TempDir()
+	appConfig.ContextResolvers = []string{}
+
+	_, _, err := daily.GetOrCreateToday(s, "")
+	if err != nil {
+		t.Fatalf("GetOrCreateToday: %v", err)
+	}
+
+	ctx := storage.Context{
+		ID:        "ctx002",
+		Name:      "bugfix",
+		Source:    "manual",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := s.CreateContext(ctx); err != nil {
+		t.Fatalf("CreateContext: %v", err)
+	}
+	if err := context.SetManualContext(appConfig.DataDir, "bugfix"); err != nil {
+		t.Fatalf("SetManualContext: %v", err)
+	}
+
+	err = jotRun(io.Discard, "fixed the bug", "")
+	if err != nil {
+		t.Fatalf("jotRun: %v", err)
+	}
+
+	e, _, _ := daily.GetOrCreateToday(s, "")
+	got, err := s.Get(e.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.Contexts) != 1 {
+		t.Fatalf("expected 1 context, got %d", len(got.Contexts))
+	}
+	if got.Contexts[0].ContextName != "bugfix" {
+		t.Errorf("context = %q, want bugfix", got.Contexts[0].ContextName)
 	}
 }

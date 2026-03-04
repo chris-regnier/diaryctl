@@ -76,6 +76,12 @@ func jotRun(w io.Writer, content string, templateName string) error {
 		return fmt.Errorf("updating entry: %w", err)
 	}
 
+	// Resolve and attach contexts
+	contextRefs := resolveContexts()
+	for _, ref := range contextRefs {
+		_ = store.AttachContext(e.ID, ref.ContextID)
+	}
+
 	if jsonOutput {
 		return ui.FormatJSON(w, updated)
 	}
