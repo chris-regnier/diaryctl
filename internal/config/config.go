@@ -29,17 +29,28 @@ type ThemeConfig struct {
 	MarkdownStyle string `mapstructure:"markdown_style"`
 }
 
+// DictateConfig holds speech-to-text configuration.
+type DictateConfig struct {
+	Recorder string            `mapstructure:"recorder"` // "sox", "arecord", "ffmpeg", or path
+	Engine   string            `mapstructure:"engine"`   // "parakeet", "whisper", "command"
+	Command  string            `mapstructure:"command"`  // Custom transcription command template
+	Model    string            `mapstructure:"model"`    // Model name or path
+	Language string            `mapstructure:"language"` // Language hint (e.g., "en")
+	Options  map[string]string `mapstructure:"options"`  // Engine-specific options
+}
+
 // Config holds the application configuration.
 type Config struct {
-	Storage          string      `mapstructure:"storage"`
-	DataDir          string      `mapstructure:"data_dir"`
-	Editor           string      `mapstructure:"editor"`
-	DefaultTemplate  string      `mapstructure:"default_template"`
-	MaxWidth         int         `mapstructure:"max_width"`
-	ContextProviders []string    `mapstructure:"context_providers"`
-	ContextResolvers []string    `mapstructure:"context_resolvers"`
-	Shell            ShellConfig `mapstructure:"shell"`
-	Theme            ThemeConfig `mapstructure:"theme"`
+	Storage          string        `mapstructure:"storage"`
+	DataDir          string        `mapstructure:"data_dir"`
+	Editor           string        `mapstructure:"editor"`
+	DefaultTemplate  string        `mapstructure:"default_template"`
+	MaxWidth         int           `mapstructure:"max_width"`
+	ContextProviders []string      `mapstructure:"context_providers"`
+	ContextResolvers []string      `mapstructure:"context_resolvers"`
+	Shell            ShellConfig   `mapstructure:"shell"`
+	Theme            ThemeConfig   `mapstructure:"theme"`
+	Dictate          DictateConfig `mapstructure:"dictate"`
 }
 
 // DefaultDataDir returns the default data directory (~/.diaryctl/).
@@ -70,6 +81,11 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("shell.show_context", true)
 	v.SetDefault("shell.show_backend", false)
 	v.SetDefault("theme.preset", "default-dark")
+	v.SetDefault("dictate.recorder", "")
+	v.SetDefault("dictate.engine", "")
+	v.SetDefault("dictate.command", "")
+	v.SetDefault("dictate.model", "base")
+	v.SetDefault("dictate.language", "en")
 
 	// Config file
 	if configPath != "" {
