@@ -66,10 +66,14 @@ func recorderBinary(name string) string {
 }
 
 // runRecordingCommand starts a recording command and waits for it to finish
-// or for the context to be cancelled. On cancellation, it sends an interrupt
-// signal to allow the tool to flush its buffer and write valid file headers.
+// or for the context to be cancelled. On cancellation, it sends SIGINT
+// to allow the tool to flush its buffer and write valid WAV file headers.
+//
+// Uses exec.Command (not CommandContext) because CommandContext sends SIGKILL
+// which would corrupt the output file by killing the process before it can
+// finalize the WAV header.
 func runRecordingCommand(ctx context.Context, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.Command(name, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 
@@ -87,15 +91,15 @@ func runRecordingCommand(ctx context.Context, name string, args ...string) error
 	case err := <-done:
 		// Process exited on its own.
 		if err != nil {
-			// Context cancellation causes the process to be killed; that's expected.
+			// If context was cancelled concurrently, that's expected.
 			if ctx.Err() != nil {
-				return ctx.Err()
+				return nil
 			}
 			return fmt.Errorf("%s exited with error: %w", name, err)
 		}
 		return nil
 	case <-ctx.Done():
-		// Context was cancelled — send interrupt to flush buffers.
+		// Context was cancelled — send SIGINT to flush buffers gracefully.
 		if cmd.Process != nil {
 			_ = cmd.Process.Signal(os.Interrupt)
 		}

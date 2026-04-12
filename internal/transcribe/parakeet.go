@@ -31,20 +31,23 @@ func (t *ParakeetTranscriber) Name() string { return "parakeet" }
 
 func (t *ParakeetTranscriber) Transcribe(ctx context.Context, audioPath string) (Result, error) {
 	// Python script that loads the model and transcribes the audio file.
-	script := fmt.Sprintf(`
+	// Model name and audio path are passed as sys.argv to avoid injection.
+	script := `
 import nemo.collections.asr as nemo_asr
 import sys
 
-model = nemo_asr.models.ASRModel.from_pretrained('%s')
-result = model.transcribe(['%s'])
+model_name = sys.argv[1]
+audio_path = sys.argv[2]
+model = nemo_asr.models.ASRModel.from_pretrained(model_name)
+result = model.transcribe([audio_path])
 if hasattr(result[0], 'text'):
     print(result[0].text)
 else:
     print(result[0])
-`, t.model, audioPath)
+`
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "python3", "-c", script)
+	cmd := exec.CommandContext(ctx, "python3", "-c", script, t.model, audioPath)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 

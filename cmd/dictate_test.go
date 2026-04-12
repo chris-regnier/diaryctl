@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -349,5 +350,80 @@ func TestDictateCommand_InvalidAttribute(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "attribute") {
 		t.Errorf("expected error about attribute, got: %v", err)
+	}
+}
+
+func TestDictateCommand_TranscriberError(t *testing.T) {
+	store := setupTestStoreV2(t)
+	audioFile := createTestAudioFile(t)
+
+	deps := DictateDeps{
+		Store:       store,
+		Transcriber: &mockTranscriber{err: fmt.Errorf("model not found")},
+		Theme:       ui.Theme{},
+	}
+
+	rootCmd := newTestRootCmd()
+	rootCmd.AddCommand(NewDictateCommand(deps))
+
+	var output bytes.Buffer
+	rootCmd.SetOut(&output)
+	rootCmd.SetErr(&output)
+	rootCmd.SetArgs([]string{"dictate", "--file", audioFile})
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when transcriber fails")
+	}
+	if !strings.Contains(err.Error(), "transcription failed") {
+		t.Errorf("expected 'transcription failed' error, got: %v", err)
+	}
+}
+
+func TestDictateCommand_EngineFlag(t *testing.T) {
+	store := setupTestStoreV2(t)
+	audioFile := createTestAudioFile(t)
+
+	// No Transcriber injected — command must create one from --engine flag.
+	// Use "command" engine with an echo command so it works without external tools.
+	deps := DictateDeps{
+		Store: store,
+		EngineConfig: transcribe.Config{
+			Options: map[string]string{
+				"command": "echo transcribed via engine flag",
+			},
+		},
+		Theme: ui.Theme{},
+	}
+
+	rootCmd := newTestRootCmd()
+	rootCmd.AddCommand(NewDictateCommand(deps))
+
+	var output bytes.Buffer
+	rootCmd.SetOut(&output)
+	rootCmd.SetErr(&output)
+	rootCmd.SetArgs([]string{"dictate", "--file", audioFile, "--engine", "command"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	outputStr := output.String()
+	if !strings.Contains(outputStr, "Created block") {
+		t.Errorf("expected output to contain 'Created block', got: %s", outputStr)
+	}
+
+	// Verify block content is from the echo command.
+	today := day.NormalizeDate(time.Now())
+	blocks, err := store.ListBlocks(today)
+	if err != nil {
+		t.Fatalf("ListBlocks() error = %v", err)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("expected 1 block, got %d", len(blocks))
+	}
+	if blocks[0].Content != "transcribed via engine flag" {
+		t.Errorf("expected content 'transcribed via engine flag', got: %s", blocks[0].Content)
 	}
 }
