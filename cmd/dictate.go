@@ -26,6 +26,11 @@ type DictateDeps struct {
 	Transcriber transcribe.Transcriber // nil = resolve from config at runtime
 	Editor      string                 // editor command (empty = resolve from config)
 	Theme       ui.Theme               // TUI theme
+
+	// Config fields used for runtime resolution when Recorder/Transcriber are nil.
+	RecorderName string // config recorder name for audio.ResolveRecorder
+	Engine       string // config engine name (e.g. "whisper", "parakeet", "command")
+	EngineConfig transcribe.Config // config for creating a transcriber
 }
 
 // NewDictateCommand creates a new dictate command for voice-to-text diary entry.
@@ -97,7 +102,12 @@ func runDictate(cmd *cobra.Command, deps DictateDeps, opts dictateOpts) error {
 	if audioPath == "" {
 		rec := deps.Recorder
 		if rec == nil {
-			return fmt.Errorf("no recorder configured: set dictate.recorder in config.toml or install sox, arecord, or ffmpeg")
+			// Try to resolve from config.
+			var err error
+			rec, err = audio.ResolveRecorder(deps.RecorderName)
+			if err != nil {
+				return fmt.Errorf("no recorder configured: set dictate.recorder in config.toml or install sox, arecord, or ffmpeg")
+			}
 		}
 
 		tmpFile, err := os.CreateTemp("", "diaryctl-dictate-*.wav")
@@ -151,7 +161,23 @@ func runDictate(cmd *cobra.Command, deps DictateDeps, opts dictateOpts) error {
 	// Step 2: Transcribe the audio.
 	tr := deps.Transcriber
 	if tr == nil {
-		return fmt.Errorf("no transcription engine configured: set dictate.engine in config.toml")
+		// Resolve transcriber from --engine flag or config.
+		engine := deps.Engine
+		if opts.engineOverride != "" {
+			engine = opts.engineOverride
+		}
+		if engine == "" {
+			return fmt.Errorf("no transcription engine configured: set dictate.engine in config.toml or use --engine flag")
+		}
+		cfg := deps.EngineConfig
+		if engine == "command" && (cfg.Options == nil || cfg.Options["command"] == "") {
+			return fmt.Errorf("command engine requires dictate.command to be set in config.toml")
+		}
+		var err error
+		tr, err = transcribe.NewTranscriber(engine, cfg)
+		if err != nil {
+			return fmt.Errorf("creating transcription engine: %w", err)
+		}
 	}
 
 	fmt.Fprintln(cmd.ErrOrStderr(), "Transcribing...")

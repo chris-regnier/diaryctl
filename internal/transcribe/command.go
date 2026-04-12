@@ -36,14 +36,14 @@ func (t *CommandTranscriber) Transcribe(ctx context.Context, audioPath string) (
 		return Result{}, fmt.Errorf("executing command template: %w", err)
 	}
 
-	expanded := cmdBuf.String()
-	parts := strings.Fields(expanded)
-	if len(parts) == 0 {
+	expanded := strings.TrimSpace(cmdBuf.String())
+	if expanded == "" {
 		return Result{}, fmt.Errorf("command template expanded to empty string")
 	}
 
+	// Use sh -c to handle argument splitting correctly (paths with spaces, etc).
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
+	cmd := exec.CommandContext(ctx, "sh", "-c", expanded)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
